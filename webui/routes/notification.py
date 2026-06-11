@@ -17,8 +17,13 @@ def notif_list(request: Request):
         return render(request, "error.html", title="Gagal fetch", message=str(e))
     items = []
     if isinstance(data, dict):
-        d = data.get("data") or {}
-        items = d.get("notifications") if isinstance(d, dict) else d
+        d = data.get("data") or data
+        if isinstance(d, dict):
+            items = d.get("inbox") or d.get("notifications") or []
+        elif isinstance(d, list):
+            items = d
+    elif isinstance(data, list):
+        items = data
         items = items or []
     return render(request, "notifications.html", items=items, raw=data)
 
