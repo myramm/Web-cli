@@ -17,7 +17,7 @@ from webui.users import (
     COOKIE_NAME, PROJECT_DIR, USERS_DIR,
     parse_session_token, get_user, user_dir,
 )
-from webui.cwd_lock import user_cwd
+from webui.context import current_user_dir
 
 # Routes accessible without auth:
 PUBLIC_PATHS = (
@@ -36,31 +36,24 @@ class WebUIAuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         path = request.url.path
-        # Skip auth for public paths
         is_public = any(path == p.rstrip("/") or path.startswith(p) for p in PUBLIC_PATHS)
 
-        # Parse session cookie
         token = request.cookies.get(COOKIE_NAME)
         username = parse_session_token(token) if token else None
         user = get_user(username) if username else None
 
         if not user:
             if is_public:
-                # Return early but leave CWD at project root for assets/login form
-                self._chdir_safely(PROJECT_DIR)
                 return await call_next(request)
-            # Redirect HTML requests to login; return 401 for AJAX/JSON
             accept = request.headers.get("accept", "")
             if "text/html" in accept or accept == "" or accept == "*/*":
                 return RedirectResponse(url=f"/u/login?next={path}", status_code=303)
             return Response("Unauthorized", status_code=401)
 
-        # Authenticated: use the shared user_cwd context (acquires lock, chdir, does reload inside)
-        # This prevents races with the background monitor_loop.
+        # Authenticated: Set ContextVar instead of using blocking Global CWD Lock
         udir = user_dir(user["username"])
         udir.mkdir(parents=True, exist_ok=True)
 
-        # Ensure seed files (using absolute paths)
         for fn, default in (
             ("refresh-tokens.json", "[]"),
         ):
@@ -69,8 +62,18 @@ class WebUIAuthMiddleware(BaseHTTPMiddleware):
                 p.write_text(default, encoding="utf-8")
         (udir / "decoy_data").mkdir(exist_ok=True)
 
-        with user_cwd(user["username"]):
-            # user_cwd already did chdir + Auth reload. Do the others too for full compatibility.
+        # SET CONTEXTVAR - Supported natively by async/await and thread pools
+        token_ctx = current_user_dir.set(udir)
+
+        try:
+            # Safe to reload Auth & Bookmark without Global Lock
+            # because they now use `resolve_path()` to dynamically point to the correct user dir
+            # based on current_user_dir context
+            try:
+                from app.service.auth import AuthInstance
+                AuthInstance.reload_for_current_dir()
+            except Exception:
+                pass
             try:
                 from app.service.bookmark import BookmarkInstance
                 BookmarkInstance.reload_for_current_dir()
@@ -82,16 +85,12 @@ class WebUIAuthMiddleware(BaseHTTPMiddleware):
             except Exception:
                 pass
 
-            # Stash webui user info for templates / handlers (available for duration of request)
             request.state.webui_user = user
             request.state.webui_user_dir = str(udir)
 
+            # Execution moves to FastAPI Route without blocking other users
             response = await call_next(request)
             return response
+        finally:
+            current_user_dir.reset(token_ctx)
 
-    @staticmethod
-    def _chdir_safely(p):
-        try:
-            os.chdir(p)
-        except Exception as e:
-            print(f"[middleware] chdir failed: {e}")

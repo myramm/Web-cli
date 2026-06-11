@@ -1,6 +1,7 @@
 """Decoy file helpers (no app.* imports — safe under user_cwd)."""
 import json
 from pathlib import Path
+from webui.context import resolve_path
 
 
 def decoy_dir() -> Path:
@@ -9,7 +10,7 @@ def decoy_dir() -> Path:
 
 def _load_json(path: Path) -> dict:
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(resolve_path(path), encoding="utf-8") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
     except Exception:

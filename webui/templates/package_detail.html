@@ -55,7 +55,7 @@
         {% elif b.data_type == 'TEXT' and b.total %}{{ b.total }} SMS
         {% elif b.total %}{{ b.total }} ({{ b.data_type }})
         {% endif %}
-        {% if b.is_unlimited %} · ♾️ Unlimited{% endif %}
+        {% if b.is_unlimited %} · <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 1 0 0-8c-2 0-4 1.33-6 4z"></path></svg> Unlimited{% endif %}
       </div>
     </li>
     {% endfor %}

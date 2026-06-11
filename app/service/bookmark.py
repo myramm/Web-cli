@@ -1,6 +1,7 @@
 import os
 import json
 from typing import List, Dict
+from webui.context import resolve_path
 
 class Bookmark:
     _instance = None
@@ -33,7 +34,7 @@ class Bookmark:
 
     def _save(self, data: List[Dict]):
         """Helper to write JSON safely."""
-        with open(self.filepath, "w", encoding="utf-8") as f:
+        with open(resolve_path(self.filepath), "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
 
     def _ensure_schema(self):
@@ -54,7 +55,7 @@ class Bookmark:
 
     def load_bookmark(self):
         """Load bookmarks from JSON file and ensure schema consistency."""
-        with open(self.filepath, "r", encoding="utf-8") as f:
+        with open(resolve_path(self.filepath), "r", encoding="utf-8") as f:
             self.packages = json.load(f)
         self._ensure_schema()
 

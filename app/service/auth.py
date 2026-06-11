@@ -4,6 +4,7 @@ import time
 from app.client.ciam import get_new_token
 from app.client.engsel import get_profile
 from app.util import ensure_api_key
+from webui.context import resolve_path
 
 class Auth:
     _instance_ = None
@@ -58,7 +59,7 @@ class Auth:
             except Exception as e:
                 print(f"[auth.reload] load_tokens err: {e}")
         else:
-            with open("refresh-tokens.json", "w", encoding="utf-8") as f:
+            with open(resolve_path("refresh-tokens.json"), "w", encoding="utf-8") as f:
                 json.dump([], f, indent=4)
         try:
             self.load_active_number()
@@ -67,7 +68,7 @@ class Auth:
         self.last_refresh_time = int(time.time())
             
     def load_tokens(self):
-        with open("refresh-tokens.json", "r", encoding="utf-8") as f:
+        with open(resolve_path("refresh-tokens.json"), "r", encoding="utf-8") as f:
             refresh_tokens = json.load(f)
             
             if len(refresh_tokens) !=  0:
@@ -109,7 +110,7 @@ class Auth:
         self.refresh_tokens = [rt for rt in self.refresh_tokens if rt["number"] != number]
         
         # Save to file
-        with open("refresh-tokens.json", "w", encoding="utf-8") as f:
+        with open(resolve_path("refresh-tokens.json"), "w", encoding="utf-8") as f:
             json.dump(self.refresh_tokens, f, indent=4)
         
         # If the removed user was the active user, select a new active user if available
@@ -248,12 +249,12 @@ class Auth:
         return active_user["tokens"] if active_user else None
     
     def write_tokens_to_file(self):
-        with open("refresh-tokens.json", "w", encoding="utf-8") as f:
+        with open(resolve_path("refresh-tokens.json"), "w", encoding="utf-8") as f:
             json.dump(self.refresh_tokens, f, indent=4)
     
     def write_active_number(self):
         if self.active_user:
-            with open("active.number", "w", encoding="utf-8") as f:
+            with open(resolve_path("active.number"), "w", encoding="utf-8") as f:
                 f.write(str(self.active_user["number"]))
         else:
             if os.path.exists("active.number"):
@@ -261,7 +262,7 @@ class Auth:
     
     def load_active_number(self):
         if os.path.exists("active.number"):
-            with open("active.number", "r", encoding="utf-8") as f:
+            with open(resolve_path("active.number"), "r", encoding="utf-8") as f:
                 number_str = f.read().strip()
                 if number_str.isdigit():
                     number = int(number_str)

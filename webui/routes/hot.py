@@ -20,9 +20,9 @@ def _read_hot(filename: str):
 
 @router.get("/hot")
 def hot(request: Request):
-    return render(request, "hot.html", title="🔥 Hot", packages=_read_hot("hot.json"), kind="hot")
+    return render(request, "hot.html", title=" Hot", packages=_read_hot("hot.json"), kind="hot")
 
 
 @router.get("/hot2")
 def hot2(request: Request):
-    return render(request, "hot.html", title="🔥🔥 Hot-2", packages=_read_hot("hot2.json"), kind="hot2")
+    return render(request, "hot.html", title=" Hot-2", packages=_read_hot("hot2.json"), kind="hot2")

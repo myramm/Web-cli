@@ -2,7 +2,7 @@
 {% block title %}Store Families · me-cli{% endblock %}
 {% block content %}
 <div class="flex items-center justify-between mb-4 gap-3">
-  <h1 class="text-2xl font-bold">📚 Store Families</h1>
+  <h1 class="text-2xl font-bold"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg> Store Families</h1>
   <form method="get" class="text-sm">
     <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="enterprise" value="true" {% if enterprise %}checked{% endif %} onchange="this.form.submit()"> <span class="text-slate-300">Enterprise</span></label>
   </form>

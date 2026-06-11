@@ -9,6 +9,7 @@ from app.service.auth import AuthInstance
 from app.service.decoy import DecoyInstance
 from app.client.engsel import get_package_details
 from webui.deps import render, get_active_user_safe
+from webui.context import resolve_path
 
 router = APIRouter()
 
@@ -55,7 +56,7 @@ def _custom_path(name: str) -> Path:
 
 def _load_json(path: Path) -> dict:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(resolve_path(path), "r", encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, dict):
             return {}
@@ -66,7 +67,7 @@ def _load_json(path: Path) -> dict:
 
 def _save_json(path: Path, data: dict) -> None:
     DECOY_DIR().mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(resolve_path(path), "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
 
@@ -278,5 +279,5 @@ def test_fetch(request: Request, kind: str, key: str):
         "price": opt.get("price", 0),
         "validity": opt.get("validity", ""),
         "note": (None if last_attempt == "stored"
-                 else "⚠️ Berhasil pakai mode AUTO (is_enterprise/migration_type stored ditolak server). Boleh saved as-is — sistem tetap retry saat beli."),
+                 else "️ Berhasil pakai mode AUTO (is_enterprise/migration_type stored ditolak server). Boleh saved as-is — sistem tetap retry saat beli."),
     }, status_code=200)

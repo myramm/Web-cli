@@ -8,16 +8,16 @@ router = APIRouter()
 
 
 STATUS_STYLES = {
-    "SUCCESS": ("emerald", "✅"),
-    "DONE": ("emerald", "✅"),
-    "COMPLETED": ("emerald", "✅"),
-    "READY": ("emerald", "✅"),
-    "PAID": ("emerald", "✅"),
+    "SUCCESS": ("emerald", ""),
+    "DONE": ("emerald", ""),
+    "COMPLETED": ("emerald", ""),
+    "READY": ("emerald", ""),
+    "PAID": ("emerald", ""),
     "PENDING": ("amber", "⏳"),
     "PROCESSING": ("amber", "⏳"),
     "WAITING": ("amber", "⏳"),
-    "FAILED": ("red", "❌"),
-    "CANCELLED": ("slate", "🚫"),
+    "FAILED": ("red", ""),
+    "CANCELLED": ("slate", ""),
     "EXPIRED": ("slate", "⌛"),
 }
 

@@ -25,6 +25,7 @@ from app.service.crypto_helper import (
 from app.service.crypto_helper import decrypt_xdata as dec_xdata
 from app.service.crypto_helper import encrypt_circle_msisdn as encrypt_msisdn
 from app.service.crypto_helper import decrypt_circle_msisdn as decrypt_msisdn
+from webui.context import resolve_path
 
 API_KEY = os.getenv("API_KEY")
 AES_KEY_ASCII = os.getenv("AES_KEY_ASCII")
@@ -58,7 +59,7 @@ def ax_fingerprint(dev: DeviceInfo, secret_key_32hex_ascii: str) -> str:
 def load_ax_fp() -> str:
     fp_path = "ax.fp"
     if os.path.exists(fp_path):
-        with open(fp_path, "r", encoding="utf-8") as f:
+        with open(resolve_path(fp_path), "r", encoding="utf-8") as f:
             content = f.read().strip()
             if content:
                 return content
@@ -77,7 +78,7 @@ def load_ax_fp() -> str:
     )
     
     new_fp = ax_fingerprint(dev, AX_FP_KEY)
-    with open(fp_path, "w", encoding="utf-8") as f:
+    with open(resolve_path(fp_path), "w", encoding="utf-8") as f:
         f.write(new_fp)
     return new_fp
     

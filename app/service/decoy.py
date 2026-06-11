@@ -4,6 +4,7 @@ import json
 
 from app.client.engsel import get_package_details
 from app.service.auth import AuthInstance
+from webui.context import resolve_path
 
 class DecoyPackage:
     _instance_ = None
@@ -95,7 +96,7 @@ class DecoyPackage:
             print(f"Refreshing decoy data for: {decoy_name}")
 
             decoy = {}
-            with open(path, "r", encoding="utf-8") as f:
+            with open(resolve_path(path), "r", encoding="utf-8") as f:
                 decoy = json.load(f)
 
             decoy_data = decoy

@@ -1,9 +1,8 @@
 """Thread-safe CWD isolation for background tasks.
 
-The Auth singleton reads from CWD, and os.chdir() is process-global.
-This module provides a lock so only one thread mutates CWD at a time,
-plus helpers that acquire fresh tokens for a given user without holding
-the lock longer than necessary.
+The Auth singleton reads from CWD. We have transitioned away from os.chdir()
+to ContextVars. This module now just sets the ContextVar so background threads
+like the Telegram bot or Monitoring loop can isolate their data.
 """
 import os
 import json
@@ -12,26 +11,25 @@ import threading
 from pathlib import Path
 
 from webui.users import user_dir, PROJECT_DIR
+from webui.context import current_user_dir
 
-_lock = threading.Lock()
 _cache_lock = threading.Lock()
 _token_cache: dict[tuple[str, int], tuple[float, dict]] = {}
-_TOKEN_CACHE_TTL = 120  # seconds — avoid re-refreshing on every button tap
+_TOKEN_CACHE_TTL=300  # seconds — avoid re-refreshing on every button tap
 
 
 class _UserCwd:
-    """Context manager: chdir into a user dir, reload AuthInstance, yield, chdir back."""
+    """Context manager: set context var for the background thread, reload AuthInstance."""
 
     def __init__(self, username: str):
         self.username = username
-        self.prev = None
+        self.token = None
 
     def __enter__(self):
-        _lock.acquire()
-        self.prev = os.getcwd()
         udir = user_dir(self.username)
         udir.mkdir(parents=True, exist_ok=True)
-        os.chdir(udir)
+        self.token = current_user_dir.set(udir)
+        
         try:
             from app.service.auth import AuthInstance
             AuthInstance.reload_for_current_dir()
@@ -40,11 +38,8 @@ class _UserCwd:
         return self
 
     def __exit__(self, *exc):
-        try:
-            os.chdir(self.prev or PROJECT_DIR)
-        except Exception:
-            os.chdir(PROJECT_DIR)
-        _lock.release()
+        if self.token:
+            current_user_dir.reset(self.token)
         return False
 
 

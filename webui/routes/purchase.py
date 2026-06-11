@@ -17,6 +17,7 @@ from app.service.decoy import DecoyInstance
 from app.type_dict import PaymentItem
 from webui.deps import render, get_active_user_safe
 from webui.routes.decoy_settings import get_custom_decoy_data, list_custom_decoys
+from webui.context import resolve_path
 
 router = APIRouter()
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -61,7 +62,7 @@ def _make_decoy_item_from_slot(api_key, tokens, slot_key: str):
     """Build decoy PaymentItem from an explicit decoy_data/decoy-{slot_key}.json file."""
     path = Path(f"decoy_data/decoy-{slot_key}.json")
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(resolve_path(path), encoding="utf-8") as f:
             raw = json.load(f)
     except Exception as e:
         return None, (
@@ -115,7 +116,7 @@ def _make_decoy_item(api_key, tokens, decoy_kind: str, *, slot_key: str | None =
         decoy_name = prefix + decoy_kind
         path = f"decoy_data/decoy-{decoy_name}.json"
         try:
-            with open(path) as f:
+            with open(resolve_path(path)) as f:
                 raw = json.load(f)
         except Exception as e:
             return None, (
@@ -233,7 +234,7 @@ def run_decoy_settlement(
         is_v2 = method == "decoy_balance_v2"
         kwargs = dict(
             api_key=api_key, tokens=tokens, items=payment_items,
-            payment_for=("🤫" if is_v2 else payment_for),
+            payment_for=("" if is_v2 else payment_for),
             ask_overwrite=False, overwrite_amount=total,
             token_confirmation_idx=(1 if is_v2 else 0),
         )
@@ -394,7 +395,7 @@ def buy_one(
             kwargs = dict(
                 api_key=AuthInstance.api_key, tokens=user["tokens"],
                 items=payment_items,
-                payment_for=("🤫" if is_v2 else payment_for),
+                payment_for=("" if is_v2 else payment_for),
                 ask_overwrite=False,
                 overwrite_amount=total,
                 token_confirmation_idx=(1 if is_v2 else 0),
@@ -619,16 +620,16 @@ def family_loop_stream(
 
         # Phase 1: fetch family
         yield _sse("phase", {"phase": "fetch_family",
-                              "msg": f"📡 Mengambil daftar paket untuk family {family_code}…"})
+                              "msg": f" Mengambil daftar paket untuk family {family_code}…"})
         try:
             family = get_family(AuthInstance.api_key, user["tokens"], family_code)
         except Exception as e:
-            yield _sse("error", {"step": "fetch_family", "msg": f"❌ Gagal fetch family: {e}"})
+            yield _sse("error", {"step": "fetch_family", "msg": f" Gagal fetch family: {e}"})
             return
 
         if not family:
             yield _sse("error", {"step": "fetch_family",
-                                 "msg": f"❌ Family code {family_code} tidak ditemukan / tidak valid untuk subscription lo."})
+                                 "msg": f" Family code {family_code} tidak ditemukan / tidak valid untuk subscription lo."})
             return
 
         family_name = family.get("package_family", {}).get("name", family_code)
@@ -637,11 +638,11 @@ def family_loop_stream(
 
         if total_opts == 0:
             yield _sse("error", {"step": "fetch_family",
-                                 "msg": f"❌ Family '{family_name}' tidak punya opsi paket apa pun."})
+                                 "msg": f" Family '{family_name}' tidak punya opsi paket apa pun."})
             return
 
         yield _sse("info", {
-            "msg": f"✅ Family '{family_name}': {len(variants)} variant, {total_opts} opsi total.",
+            "msg": f" Family '{family_name}': {len(variants)} variant, {total_opts} opsi total.",
             "total": total_opts,
             "start_from": start_from,
             "delay": delay_seconds,
@@ -679,7 +680,7 @@ def family_loop_stream(
                 # Step 1: fetch package detail
                 yield _sse("progress", {
                     "seq": seq, "step": "fetch_detail",
-                    "msg": "   ↳ 📦 Fetch package detail…",
+                    "msg": "   ↳  Fetch package detail…",
                 })
                 try:
                     pkg = get_package(AuthInstance.api_key, user["tokens"], code, family_code, variant_code)
@@ -687,7 +688,7 @@ def family_loop_stream(
                     err_count += 1
                     yield _sse("fail", {
                         "seq": seq, "step": "fetch_detail",
-                        "msg": f"   ↳ ❌ Gagal fetch detail: {e}",
+                        "msg": f"   ↳  Gagal fetch detail: {e}",
                         "summary": {"ok": ok_count, "fail": fail_count, "err": err_count},
                     })
                     if delay_seconds > 0: time.sleep(delay_seconds)
@@ -697,7 +698,7 @@ def family_loop_stream(
                     err_count += 1
                     yield _sse("fail", {
                         "seq": seq, "step": "fetch_detail",
-                        "msg": "   ↳ ❌ Detail paket kosong (mungkin opsi tidak tersedia).",
+                        "msg": "   ↳  Detail paket kosong (mungkin opsi tidak tersedia).",
                         "summary": {"ok": ok_count, "fail": fail_count, "err": err_count},
                     })
                     if delay_seconds > 0: time.sleep(delay_seconds)
@@ -708,7 +709,7 @@ def family_loop_stream(
                 # Step 2: submit settlement
                 yield _sse("progress", {
                     "seq": seq, "step": "submit",
-                    "msg": f"   ↳ 💸 Submit pembayaran via Pulsa (Rp {item['item_price']:,})…".replace(",", "."),
+                    "msg": f"   ↳  Submit pembayaran via Pulsa (Rp {item['item_price']:,})…".replace(",", "."),
                 })
                 try:
                     res = settlement_balance(
@@ -720,7 +721,7 @@ def family_loop_stream(
                     err_count += 1
                     yield _sse("fail", {
                         "seq": seq, "step": "submit",
-                        "msg": f"   ↳ ❌ Exception saat submit: {e}",
+                        "msg": f"   ↳  Exception saat submit: {e}",
                         "summary": {"ok": ok_count, "fail": fail_count, "err": err_count},
                     })
                     if delay_seconds > 0: time.sleep(delay_seconds)
@@ -731,7 +732,7 @@ def family_loop_stream(
                     ok_count += 1
                     yield _sse("success", {
                         "seq": seq, "step": "done",
-                        "msg": f"   ↳ ✅ BERHASIL beli {option_name}",
+                        "msg": f"   ↳  BERHASIL beli {option_name}",
                         "summary": {"ok": ok_count, "fail": fail_count, "err": err_count},
                     })
                 else:
@@ -739,14 +740,14 @@ def family_loop_stream(
                     detail = _extract_err(res)
                     hint = ""
                     if "Bizz-err.Amount.Total" in detail:
-                        hint = "  💡 Amount tidak match. Server biasanya kasih amount yang benar di pesan error."
+                        hint = "   Amount tidak match. Server biasanya kasih amount yang benar di pesan error."
                     elif "balance" in detail.lower() or "insufficient" in detail.lower():
-                        hint = "  💡 Saldo pulsa nggak cukup."
+                        hint = "   Saldo pulsa nggak cukup."
                     elif "already" in detail.lower() or "duplicate" in detail.lower():
-                        hint = "  💡 Paket mungkin sudah aktif/baru saja dibeli."
+                        hint = "   Paket mungkin sudah aktif/baru saja dibeli."
                     yield _sse("fail", {
                         "seq": seq, "step": "done",
-                        "msg": f"   ↳ ⚠️ Ditolak server: {detail}{hint}",
+                        "msg": f"   ↳ ️ Ditolak server: {detail}{hint}",
                         "summary": {"ok": ok_count, "fail": fail_count, "err": err_count},
                     })
 
@@ -758,7 +759,7 @@ def family_loop_stream(
                     time.sleep(delay_seconds)
 
         yield _sse("done", {
-            "msg": f"🏁 Selesai — {ok_count} sukses, {fail_count} ditolak, {err_count} error dari {total_opts} opsi.",
+            "msg": f" Selesai — {ok_count} sukses, {fail_count} ditolak, {err_count} error dari {total_opts} opsi.",
             "summary": {"ok": ok_count, "fail": fail_count, "err": err_count, "total": total_opts},
         })
 
