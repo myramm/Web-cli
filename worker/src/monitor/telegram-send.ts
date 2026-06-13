@@ -78,8 +78,10 @@ export async function sendTelegram(
   if (!Number.isFinite(chatId)) return { ok: false, info: "Chat ID invalid" };
 
   try {
-    const ok = await api.sendMessage(chatId, text);
-    return ok ? { ok: true, info: "Pesan terkirim" } : { ok: false, info: "Gagal kirim pesan" };
+    const result = await api.sendMessageDetailed(chatId, text);
+    return result.ok
+      ? { ok: true, info: "Pesan terkirim" }
+      : { ok: false, info: result.error ?? "Gagal kirim pesan" };
   } catch (e) {
     return { ok: false, info: `Exception: ${e}` };
   }

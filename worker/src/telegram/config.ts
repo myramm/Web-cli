@@ -56,6 +56,8 @@ export async function saveTelegramConfig(
 ): Promise<void> {
   const current = await loadTelegramConfig(env, storage);
   const next = { ...current, ...patch };
+  if (!String(next.bot_token ?? "").trim()) next.bot_token = current.bot_token;
+  if (!String(next.webhook_secret ?? "").trim()) next.webhook_secret = current.webhook_secret;
   await storage.putBlob(
     null,
     GLOBAL_TELEGRAM_CONFIG,

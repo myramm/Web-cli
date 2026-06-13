@@ -1,7 +1,13 @@
 import type { InlineKeyboard } from "./types";
 
+export interface TelegramSendResult {
+  ok: boolean;
+  error?: string;
+}
+
 export interface TelegramApi {
   sendMessage(chatId: number, text: string, replyMarkup?: InlineKeyboard): Promise<boolean>;
+  sendMessageDetailed(chatId: number, text: string, replyMarkup?: InlineKeyboard): Promise<TelegramSendResult>;
   editMessage(chatId: number, messageId: number, text: string, replyMarkup?: InlineKeyboard): Promise<boolean>;
   answerCallbackQuery(callbackQueryId: string): Promise<void>;
 }
@@ -17,22 +23,49 @@ export function createTelegramApi(botToken: string, fetchFn: typeof fetch = fetc
     });
   }
 
-  return {
-    async sendMessage(chatId, text, replyMarkup) {
-      const payload: Record<string, unknown> = {
+  async function sendMessageDetailed(chatId: number, text: string, replyMarkup?: InlineKeyboard): Promise<TelegramSendResult> {
+    const attempts: Array<Record<string, unknown>> = [
+      {
         chat_id: chatId,
         text,
         parse_mode: "HTML",
         disable_web_page_preview: true,
-      };
-      if (replyMarkup) payload.reply_markup = replyMarkup;
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      },
+      {
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: true,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      },
+    ];
+
+    let lastError = "Gagal kirim pesan";
+    for (const payload of attempts) {
       try {
         const res = await post("sendMessage", payload);
-        return res.ok;
-      } catch {
-        return false;
+        if (res.ok) return { ok: true };
+        let data: { description?: string } = {};
+        try {
+          data = (await res.json()) as { description?: string };
+        } catch {
+          // ignore
+        }
+        lastError = String(data.description ?? `HTTP ${res.status}`);
+      } catch (e) {
+        lastError = String(e);
       }
+    }
+    return { ok: false, error: lastError };
+  }
+
+  return {
+    async sendMessage(chatId, text, replyMarkup) {
+      const result = await sendMessageDetailed(chatId, text, replyMarkup);
+      return result.ok;
     },
+
+    sendMessageDetailed,
 
     async editMessage(chatId, messageId, text, replyMarkup) {
       const payload: Record<string, unknown> = {

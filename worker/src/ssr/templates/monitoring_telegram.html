@@ -1,7 +1,9 @@
 <div class="max-w-2xl mx-auto">
 {{#msg_saved}}<div class="alert-success">Settings disimpan.</div>{{/msg_saved}}
+{{#msg_webhook_ok}}<div class="alert-success">Webhook Telegram berhasil didaftarkan.</div>{{/msg_webhook_ok}}
+{{#msg_webhook_fail}}<div class="alert-error">Gagal daftar webhook. Pastikan bot token valid lalu coba lagi.</div>{{/msg_webhook_fail}}
 {{#msg_test_ok}}<div class="alert-success">Test message terkirim!</div>{{/msg_test_ok}}
-{{#msg_test_fail}}<div class="alert-error">Gagal kirim test message. Cek bot token &amp; chat ID.</div>{{/msg_test_fail}}
+{{#msg_test_fail}}<div class="alert-error">Gagal kirim test message.{{#has_test_info}} <span class="block mt-1 text-xs opacity-90">{{test_info}}</span>{{/has_test_info}}{{^has_test_info}} Cek bot token &amp; chat ID.{{/has_test_info}}</div>{{/msg_test_fail}}
 {{#msg_no_chat_id}}<div class="alert-warning break-words">Chat ID belum ada. Link dulu akun kamu via Telegram bot: <code class="break-all">/link username password</code></div>{{/msg_no_chat_id}}
 
 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
@@ -88,6 +90,57 @@
 
   <button type="submit" class="btn btn-primary text-sm w-full sm:w-auto px-6 py-2.5">Simpan</button>
 </form>
+
+<div class="card mt-4 sm:mt-6 space-y-4">
+  <h2 class="text-sm font-semibold text-white theme-light:text-slate-800 uppercase tracking-wider">Webhook Status</h2>
+
+  {{#has_bot_token}}
+  <div class="space-y-3">
+    <div class="flex items-center gap-2">
+      {{#webhook_ok}}
+      <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></div>
+      <span class="text-sm text-emerald-300">Webhook aktif</span>
+      {{/webhook_ok}}
+      {{^webhook_ok}}
+      <div class="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0"></div>
+      <span class="text-sm text-amber-300">Webhook belum terdaftar / URL tidak cocok</span>
+      {{/webhook_ok}}
+    </div>
+
+    <div class="neu-inset-card rounded-xl p-3 sm:p-4 space-y-2 text-xs text-slate-400 leading-relaxed">
+      <div>
+        <span class="text-slate-500">URL yang diharapkan:</span>
+        <code class="block mt-1 break-all text-slate-300">{{expected_webhook_url}}</code>
+      </div>
+      {{#registered_webhook_url}}
+      <div>
+        <span class="text-slate-500">URL terdaftar di Telegram:</span>
+        <code class="block mt-1 break-all text-slate-300">{{registered_webhook_url}}</code>
+      </div>
+      {{/registered_webhook_url}}
+      {{^registered_webhook_url}}
+      <div class="text-amber-300/90">Belum ada webhook terdaftar — bot tidak akan menerima pesan sampai didaftarkan.</div>
+      {{/registered_webhook_url}}
+      {{#webhook_pending_updates}}
+      <div>Update menunggu: <span class="text-slate-300">{{webhook_pending_updates}}</span></div>
+      {{/webhook_pending_updates}}
+      {{#has_webhook_error}}
+      <div class="text-red-300/90">Error terakhir: {{webhook_last_error}}</div>
+      {{/has_webhook_error}}
+    </div>
+
+    <form action="/monitoring/telegram/webhook" method="post">
+      <button type="submit" class="btn btn-secondary text-xs w-full sm:w-auto px-4 py-2 inline-flex items-center justify-center gap-1.5">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+        Daftar ulang webhook
+      </button>
+    </form>
+  </div>
+  {{/has_bot_token}}
+  {{^has_bot_token}}
+  <div class="text-sm text-slate-400">Isi bot token dulu, lalu simpan untuk mendaftarkan webhook otomatis.</div>
+  {{/has_bot_token}}
+</div>
 
 <div class="card mt-4 sm:mt-6 space-y-4">
   <h2 class="text-sm font-semibold text-white theme-light:text-slate-800 uppercase tracking-wider">Link Status</h2>

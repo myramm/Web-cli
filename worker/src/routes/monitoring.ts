@@ -17,6 +17,12 @@ import { addRule, deleteRule, getRule, loadRules, updateRule } from "../monitor/
 import { resolveSendConfig, saveUserTelegram, sendTelegram } from "../monitor/telegram-send";
 import { renderWebuiPage, requireWebuiUser } from "../myxl/require";
 import { loadTelegramConfig, saveTelegramConfig } from "../telegram/config";
+import {
+  ensureWebhookSecret,
+  getTelegramWebhookInfo,
+  registerTelegramWebhook,
+  webhookUrlForRequest,
+} from "../telegram/webhook-setup";
 import type { MatchKind, TriggerMetric, TriggerOp } from "../monitor/types";
 import type { AppEnv } from "../types";
 
@@ -30,11 +36,51 @@ function msgFlags(msg: string) {
     msg_rule_added: msg === "rule_added",
     msg_rule_deleted: msg === "rule_deleted",
     msg_ran: msg === "ran",
-    msg_saved: msg === "saved",
+    msg_saved: msg === "saved" || msg === "webhook_ok",
+    msg_webhook_ok: msg === "webhook_ok",
+    msg_webhook_fail: msg === "webhook_fail",
     msg_test_ok: msg === "test_ok",
     msg_test_fail: msg === "test_fail",
     msg_no_chat_id: msg === "no_chat_id",
   };
+}
+
+async function buildTelegramPageContext(request: Request, env: AppEnv["Bindings"], storage: AppEnv["Variables"]["storage"], webuiUser: { username: string }) {
+  const tgGlobal = await loadTelegramConfig(env, storage);
+  const tgUser = await resolveSendConfig(env, storage, webuiUser.username);
+  const user = await getUser(storage, webuiUser.username);
+  const expectedWebhookUrl = webhookUrlForRequest(request.url);
+  const webhookInfo = tgGlobal.bot_token ? await getTelegramWebhookInfo(tgGlobal.bot_token) : null;
+  const registeredUrl = webhookInfo?.url ?? "";
+  return {
+    tg_global: tgGlobal,
+    tg_user: tgUser,
+    chat_id: user?.telegram_chat_id ?? null,
+    has_chat_id: !!user?.telegram_chat_id,
+    hour_options: hourOptions(tgGlobal.daily_summary_hour),
+    minute_options: minuteOptions(tgGlobal.daily_summary_minute),
+    expected_webhook_url: expectedWebhookUrl,
+    registered_webhook_url: registeredUrl,
+    webhook_ok: Boolean(registeredUrl && registeredUrl === expectedWebhookUrl),
+    webhook_pending_updates: webhookInfo?.pending_update_count ?? 0,
+    webhook_last_error: webhookInfo?.last_error_message ?? "",
+    has_webhook_error: Boolean(webhookInfo?.last_error_message),
+    has_bot_token: Boolean(tgGlobal.bot_token),
+  };
+}
+
+async function syncTelegramWebhook(request: Request, env: AppEnv["Bindings"], storage: AppEnv["Variables"]["storage"]) {
+  const current = await loadTelegramConfig(env, storage);
+  const botToken = current.bot_token.trim();
+  if (!botToken) return { ok: false, description: "Bot token belum di-set" };
+
+  const webhookSecret = ensureWebhookSecret(current.webhook_secret, env.TELEGRAM_WEBHOOK_SECRET);
+  if (webhookSecret !== current.webhook_secret) {
+    await saveTelegramConfig(env, storage, { webhook_secret: webhookSecret });
+  }
+
+  const webhookUrl = webhookUrlForRequest(request.url);
+  return registerTelegramWebhook(botToken, webhookUrl, webhookSecret);
 }
 
 monitoring.get("/monitoring", async (c) => {
@@ -109,19 +155,15 @@ monitoring.get("/monitoring/telegram", async (c) => {
   if (webuiUser instanceof Response) return webuiUser;
 
   const storage = c.get("storage");
-  const tgGlobal = await loadTelegramConfig(c.env, storage);
-  const tgUser = await resolveSendConfig(c.env, storage, webuiUser.username);
-  const user = await getUser(storage, webuiUser.username);
+  const page = await buildTelegramPageContext(c.req.raw, c.env, storage, webuiUser);
 
+  const testInfo = String(c.req.query("test_info") ?? "").trim();
   return renderWebuiPage(c, webuiUser, "monitoring_telegram", {
     page_title: "Telegram Settings · WebUI-XL",
     ...msgFlags(c.req.query("msg") ?? ""),
-    tg_global: tgGlobal,
-    tg_user: tgUser,
-    chat_id: user?.telegram_chat_id ?? null,
-    has_chat_id: !!user?.telegram_chat_id,
-    hour_options: hourOptions(tgGlobal.daily_summary_hour),
-    minute_options: minuteOptions(tgGlobal.daily_summary_minute),
+    test_info: testInfo,
+    has_test_info: !!testInfo,
+    ...page,
   });
 });
 
@@ -130,18 +172,21 @@ monitoring.post("/monitoring/telegram", async (c) => {
   if (webuiUser instanceof Response) return webuiUser;
 
   const body = await c.req.parseBody();
-  const botToken = String(body.bot_token ?? "").trim();
+  const storage = c.get("storage");
+  const current = await loadTelegramConfig(c.env, storage);
+  const botToken = String(body.bot_token ?? "").trim() || current.bot_token;
   const enabled = body.enabled === "on";
   const dailySummaryEnabled = body.daily_summary_enabled === "on";
   const dailySummaryHour = Number.parseInt(String(body.daily_summary_hour ?? 7), 10);
   const dailySummaryMinute = Number.parseInt(String(body.daily_summary_minute ?? 0), 10);
   const lowQuotaThreshold = Number.parseInt(String(body.low_quota_threshold_pct ?? 10), 10);
   const pollInterval = Math.max(1, Number.parseInt(String(body.poll_interval_minutes ?? 5), 10));
+  const webhookSecret = ensureWebhookSecret(current.webhook_secret, c.env.TELEGRAM_WEBHOOK_SECRET);
 
-  const storage = c.get("storage");
   await saveTelegramConfig(c.env, storage, {
     bot_token: botToken,
     enabled,
+    webhook_secret: webhookSecret,
     daily_summary_enabled: dailySummaryEnabled,
     daily_summary_hour: dailySummaryHour,
     daily_summary_minute: dailySummaryMinute,
@@ -157,7 +202,18 @@ monitoring.post("/monitoring/telegram", async (c) => {
     user?.telegram_chat_id ? String(user.telegram_chat_id) : "",
   );
 
-  return c.redirect("/monitoring/telegram?msg=saved", 303);
+  const webhook = botToken ? await syncTelegramWebhook(c.req.raw, c.env, storage) : { ok: false, description: "Bot token kosong" };
+  const msg = webhook.ok ? "webhook_ok" : "webhook_fail";
+  return c.redirect(`/monitoring/telegram?msg=${msg}`, 303);
+});
+
+monitoring.post("/monitoring/telegram/webhook", async (c) => {
+  const webuiUser = requireWebuiUser(c);
+  if (webuiUser instanceof Response) return webuiUser;
+
+  const storage = c.get("storage");
+  const webhook = await syncTelegramWebhook(c.req.raw, c.env, storage);
+  return c.redirect(`/monitoring/telegram?msg=${webhook.ok ? "webhook_ok" : "webhook_fail"}`, 303);
 });
 
 monitoring.post("/monitoring/telegram/test", async (c) => {
@@ -172,8 +228,13 @@ monitoring.post("/monitoring/telegram/test", async (c) => {
   }
 
   const cfg = { bot_token: tgCfg.bot_token, chat_id: String(user.telegram_chat_id) };
-  const { ok } = await sendTelegram(c.env, storage, "Test message dari me-cli WebUI!", { cfg });
-  return c.redirect(`/monitoring/telegram?msg=${ok ? "test_ok" : "test_fail"}`, 303);
+  const { ok, info } = await sendTelegram(
+    c.env,
+    storage,
+    "✅ <b>Test berhasil!</b>\n\nBot Telegram WebUI-XL sudah terhubung ke akun kamu.",
+    { cfg },
+  );
+  return c.redirect(`/monitoring/telegram?msg=${ok ? "test_ok" : "test_fail"}&test_info=${encodeURIComponent(info)}`, 303);
 });
 
 monitoring.post("/monitoring/rules", async (c) => {
