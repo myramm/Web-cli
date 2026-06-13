@@ -1,0 +1,111 @@
+import { Hono } from "hono";
+import { createStoreClient } from "../clients/store";
+import { htmlResponse, renderErrorPage } from "../ssr";
+import {
+  formatRedeemables,
+  formatStoreFamilies,
+  formatStorePackages,
+  formatStoreSegments,
+} from "../myxl/store";
+import { renderActivePage, requireActiveSession } from "../myxl/require";
+import type { AppEnv } from "../types";
+
+export const store = new Hono<AppEnv>();
+
+function enterpriseFlag(c: { req: { query: (k: string) => string | undefined } }): boolean {
+  return c.req.query("enterprise") === "true";
+}
+
+store.get("/store/segments", async (c) => {
+  const session = await requireActiveSession(c);
+  if (session instanceof Response) return session;
+  const enterprise = enterpriseFlag(c);
+  const storeClient = createStoreClient(session.clients.engsel);
+  try {
+    const res = await storeClient.getSegments(session.activeUser.tokens.id_token, enterprise);
+    const segments = formatStoreSegments(res);
+    return renderActivePage(c, session, "store_segments", {
+      page_title: "Store Segments · WebUI-XL",
+      segments,
+      has_segments: segments.length > 0,
+      enterprise,
+    });
+  } catch (e) {
+    const html = renderErrorPage(c.req.raw, { title: "Gagal fetch", message: String(e) });
+    return htmlResponse(html, 500);
+  }
+});
+
+store.get("/store/families", async (c) => {
+  const session = await requireActiveSession(c);
+  if (session instanceof Response) return session;
+  const enterprise = enterpriseFlag(c);
+  const storeClient = createStoreClient(session.clients.engsel);
+  const subsType = session.activeUser.subscription_type || "PREPAID";
+  try {
+    const res = await storeClient.getFamilyList(session.activeUser.tokens.id_token, subsType, enterprise);
+    const families = formatStoreFamilies(res);
+    return renderActivePage(c, session, "store_families", {
+      page_title: "Store Families · WebUI-XL",
+      families,
+      has_families: families.length > 0,
+      enterprise,
+    });
+  } catch (e) {
+    const html = renderErrorPage(c.req.raw, { title: "Gagal fetch", message: String(e) });
+    return htmlResponse(html, 500);
+  }
+});
+
+store.get("/store/packages", async (c) => {
+  const session = await requireActiveSession(c);
+  if (session instanceof Response) return session;
+  const enterprise = enterpriseFlag(c);
+  const q = c.req.query("q") ?? "";
+  const storeClient = createStoreClient(session.clients.engsel);
+  const subsType = session.activeUser.subscription_type || "PREPAID";
+  try {
+    const res = await storeClient.getStorePackages(session.activeUser.tokens.id_token, subsType, enterprise);
+    let packages = formatStorePackages(res);
+    if (q.trim()) {
+      const ql = q.toLowerCase();
+      packages = packages.filter(
+        (p) =>
+          String(p.title).toLowerCase().includes(ql) ||
+          String(p.family_name).toLowerCase().includes(ql),
+      );
+    }
+    return renderActivePage(c, session, "store_packages", {
+      page_title: "Store Packages · WebUI-XL",
+      packages,
+      has_packages: packages.length > 0,
+      package_count: packages.length,
+      enterprise,
+      q,
+      has_query: Boolean(q.trim()),
+    });
+  } catch (e) {
+    const html = renderErrorPage(c.req.raw, { title: "Gagal fetch", message: String(e) });
+    return htmlResponse(html, 500);
+  }
+});
+
+store.get("/store/redemables", async (c) => {
+  const session = await requireActiveSession(c);
+  if (session instanceof Response) return session;
+  const enterprise = enterpriseFlag(c);
+  const storeClient = createStoreClient(session.clients.engsel);
+  try {
+    const res = await storeClient.getRedeemables(session.activeUser.tokens.id_token, enterprise);
+    const categories = formatRedeemables(res);
+    return renderActivePage(c, session, "store_redemables", {
+      page_title: "Redemables · WebUI-XL",
+      categories,
+      has_categories: categories.length > 0,
+      enterprise,
+    });
+  } catch (e) {
+    const html = renderErrorPage(c.req.raw, { title: "Gagal fetch", message: String(e) });
+    return htmlResponse(html, 500);
+  }
+});

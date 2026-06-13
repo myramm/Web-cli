@@ -14,6 +14,16 @@ describe("MyXL templates", () => {
     expect(html).toContain("/login/request-otp");
   });
 
+  it("renders bookmark page", () => {
+    const html = renderLayout("bookmark", new Request("http://localhost/bookmark"), {
+      page_title: "Bookmark",
+      has_bookmarks: true,
+      bookmarks: [{ family_name: "F", variant_name: "V", option_name: "O", order: 1, family_code: "FC", is_enterprise: false }],
+    });
+    expect(html).toContain("Bookmark");
+    expect(html).toContain("/bookmark/remove");
+  });
+
   it("renders dashboard with active user", () => {
     const html = renderLayout("dashboard", new Request("http://localhost/"), {
       page_title: "Beranda",

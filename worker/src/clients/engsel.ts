@@ -98,6 +98,100 @@ export function createEngselClient(options: EngselClientOptions) {
     return res.data as Record<string, unknown>;
   }
 
+  async function getFamily(
+    idToken: string,
+    familyCode: string,
+    isEnterprise?: boolean,
+    migrationType?: string,
+  ): Promise<Record<string, unknown> | null> {
+    const migrationTypes = migrationType
+      ? [migrationType]
+      : ["NONE", "PRE_TO_PRIOH", "PRIOH_TO_PRIO", "PRIO_TO_PRIOH"];
+    const enterpriseFlags = isEnterprise !== undefined ? [isEnterprise] : [false, true];
+
+    for (const mt of migrationTypes) {
+      for (const ie of enterpriseFlags) {
+        const res = await sendApiRequest(
+          "api/v8/xl-stores/options/list",
+          {
+            is_show_tagging_tab: true,
+            is_dedicated_event: true,
+            is_transaction_routine: false,
+            migration_type: mt,
+            package_family_code: familyCode,
+            is_autobuy: false,
+            is_enterprise: ie,
+            is_pdlp: true,
+            referral_code: "",
+            is_migration: false,
+            lang: "en",
+          },
+          idToken,
+        );
+        if (typeof res === "string" || res.status !== "SUCCESS") continue;
+        const data = res.data as Record<string, unknown> | undefined;
+        const family = (data?.package_family as Record<string, unknown>) ?? {};
+        if (family.name) return data ?? null;
+      }
+    }
+    return null;
+  }
+
+  async function getPackage(idToken: string, packageOptionCode: string): Promise<Record<string, unknown> | null> {
+    const res = await sendApiRequest(
+      "api/v8/xl-stores/options/detail",
+      {
+        is_transaction_routine: false,
+        migration_type: "NONE",
+        package_family_code: "",
+        family_role_hub: "",
+        is_autobuy: false,
+        is_enterprise: false,
+        is_shareable: false,
+        is_migration: false,
+        lang: "en",
+        package_option_code: packageOptionCode,
+        is_upsell_pdp: false,
+        package_variant_code: "",
+      },
+      idToken,
+    );
+    if (typeof res === "string" || !res.data) return null;
+    return res.data as Record<string, unknown>;
+  }
+
+  async function unsubscribePackage(
+    idToken: string,
+    quotaCode: string,
+    productDomain: string,
+    productSubscriptionType: string,
+  ): Promise<boolean> {
+    const res = await sendApiRequest(
+      "api/v8/packages/unsubscribe",
+      {
+        product_subscription_type: productSubscriptionType,
+        quota_code: quotaCode,
+        product_domain: productDomain,
+        is_enterprise: false,
+        unsubscribe_reason_code: "",
+        lang: "en",
+        family_member_id: "",
+      },
+      idToken,
+    );
+    return typeof res !== "string" && res?.code === "000";
+  }
+
+  async function getQuotaDetailsRaw(idToken: string, familyMemberId = "") {
+    const res = await sendApiRequest(
+      "api/v8/packages/quota-details",
+      { is_enterprise: false, lang: "en", family_member_id: familyMemberId },
+      idToken,
+    );
+    if (typeof res === "string") return null;
+    return res as Record<string, unknown>;
+  }
+
   async function loginInfo(tokens: EngselTokens, isEnterprise = false) {
     const res = await sendApiRequest(
       "api/v8/auth/login",
@@ -113,6 +207,10 @@ export function createEngselClient(options: EngselClientOptions) {
     getProfile,
     getBalance,
     getQuotaDetails,
+    getQuotaDetailsRaw,
+    getFamily,
+    getPackage,
+    unsubscribePackage,
     getTieringInfo,
     loginInfo,
   };

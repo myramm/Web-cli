@@ -1,0 +1,127 @@
+import { Hono } from "hono";
+import { htmlResponse, renderErrorPage } from "../ssr";
+import { formatFamilyDetail, formatPackageDetail } from "../myxl/packages";
+import { formatMyPackages } from "../myxl/quota";
+import { renderActivePage, requireActiveSession } from "../myxl/require";
+import type { AppEnv } from "../types";
+
+export const packages = new Hono<AppEnv>();
+
+packages.get("/packages/by-option", async (c) => {
+  const session = await requireActiveSession(c);
+  if (session instanceof Response) return session;
+
+  const code = c.req.query("code")?.trim();
+  if (!code) {
+    return renderActivePage(c, session, "packages_input_code", {
+      page_title: "Cari paket · WebUI-XL",
+      mode: "option",
+      mode_option: true,
+      form_action: "/packages/by-option",
+      label: "Option Code",
+    });
+  }
+
+  try {
+    const pkg = await session.clients.engsel.getPackage(session.activeUser.tokens.id_token, code);
+    if (!pkg) {
+      const html = renderErrorPage(c.req.raw, {
+        title: "Tidak ditemukan",
+        message: `Option code ${code} tidak ditemukan.`,
+      });
+      return htmlResponse(html, 404);
+    }
+    return renderActivePage(c, session, "package_detail", {
+      page_title: `${formatPackageDetail(pkg, code).opt_name} · WebUI-XL`,
+      ...formatPackageDetail(pkg, code),
+    });
+  } catch (e) {
+    const html = renderErrorPage(c.req.raw, { title: "Gagal fetch", message: String(e) });
+    return htmlResponse(html, 500);
+  }
+});
+
+packages.get("/packages/by-family", async (c) => {
+  const session = await requireActiveSession(c);
+  if (session instanceof Response) return session;
+
+  const code = c.req.query("code")?.trim();
+  if (!code) {
+    return renderActivePage(c, session, "packages_input_code", {
+      page_title: "Cari paket · WebUI-XL",
+      mode: "family",
+      mode_family: true,
+      form_action: "/packages/by-family",
+      label: "Family Code",
+    });
+  }
+
+  try {
+    const family = await session.clients.engsel.getFamily(session.activeUser.tokens.id_token, code);
+    if (!family) {
+      const html = renderErrorPage(c.req.raw, {
+        title: "Tidak ditemukan",
+        message: `Family code ${code} tidak ditemukan.`,
+      });
+      return htmlResponse(html, 404);
+    }
+    const ctx = formatFamilyDetail(family, code);
+    return renderActivePage(c, session, "family_detail", {
+      page_title: `${ctx.fam_name} · WebUI-XL`,
+      ...ctx,
+    });
+  } catch (e) {
+    const html = renderErrorPage(c.req.raw, { title: "Gagal fetch", message: String(e) });
+    return htmlResponse(html, 500);
+  }
+});
+
+packages.get("/packages/my", async (c) => {
+  const session = await requireActiveSession(c);
+  if (session instanceof Response) return session;
+
+  const msg = c.req.query("msg");
+  try {
+    const res = await session.clients.engsel.getQuotaDetailsRaw(session.activeUser.tokens.id_token);
+    const quotas =
+      res?.status === "SUCCESS"
+        ? formatMyPackages(((res.data as Record<string, unknown>)?.quotas as Record<string, unknown>[]) ?? [])
+        : [];
+
+    return renderActivePage(c, session, "my_packages", {
+      page_title: "Paket Saya · WebUI-XL",
+      has_quotas: quotas.length > 0,
+      quotas,
+      msg_ok: msg === "ok",
+      msg_fail: msg === "fail",
+      show_raw: quotas.length === 0,
+      raw_json: JSON.stringify(res, null, 2),
+    });
+  } catch (e) {
+    const html = renderErrorPage(c.req.raw, { title: "Gagal fetch", message: String(e) });
+    return htmlResponse(html, 500);
+  }
+});
+
+packages.post("/packages/my/unsubscribe", async (c) => {
+  const session = await requireActiveSession(c);
+  if (session instanceof Response) return session;
+
+  const body = await c.req.parseBody();
+  const quotaCode = String(body.quota_code ?? "");
+  const productDomain = String(body.product_domain ?? "");
+  const productSubscriptionType = String(body.product_subscription_type ?? "");
+
+  try {
+    const ok = await session.clients.engsel.unsubscribePackage(
+      session.activeUser.tokens.id_token,
+      quotaCode,
+      productDomain,
+      productSubscriptionType,
+    );
+    return c.redirect(`/packages/my?msg=${ok ? "ok" : "fail"}`, 303);
+  } catch (e) {
+    const html = renderErrorPage(c.req.raw, { title: "Unsubscribe gagal", message: String(e) });
+    return htmlResponse(html, 500);
+  }
+});

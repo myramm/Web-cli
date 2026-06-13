@@ -1,0 +1,73 @@
+<div class="card mb-4 min-w-0 w-full">
+  <div class="flex items-start justify-between gap-3 min-w-0">
+    <div class="min-w-0 flex-1">
+      <div class="text-xs text-slate-400">{{fam_name}}{{#has_variant}} · {{variant_name}}{{/has_variant}}</div>
+      <h1 class="text-xl font-bold">{{opt_name}}</h1>
+      <div class="text-2xl font-bold text-indigo-300 mt-2">{{opt_price_rp}}</div>
+      <div class="text-sm text-slate-400 mt-1">Masa aktif: {{opt_validity}}</div>
+      {{#has_point}}<div class="text-sm text-slate-400">Point: {{opt_point}}</div>{{/has_point}}
+    </div>
+    <form action="/bookmark/add" method="post" class="shrink-0">
+      <input type="hidden" name="family_code" value="{{family_code}}">
+      <input type="hidden" name="family_name" value="{{fam_name}}">
+      <input type="hidden" name="is_enterprise" value="{{is_enterprise}}">
+      <input type="hidden" name="variant_name" value="{{variant_name}}">
+      <input type="hidden" name="option_name" value="{{opt_name}}">
+      <input type="hidden" name="order" value="{{opt_order}}">
+      <input type="hidden" name="package_option_code" value="{{option_code}}">
+      <button type="submit" class="btn btn-secondary" title="Bookmark">★</button>
+    </form>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-xs min-w-0 w-full">
+    <div class="code-field min-w-0">
+      <div class="text-slate-400 mb-1">Family code</div>
+      <div class="code-wrap break-all text-slate-200">{{family_code}}</div>
+    </div>
+    <div class="code-field min-w-0 w-full sm:col-span-2">
+      <div class="text-slate-400 mb-1">Option code</div>
+      <div class="code-wrap break-all text-slate-200">{{option_code}}</div>
+    </div>
+    <div class="code-field"><span class="text-slate-400">Payment for:</span> {{payment_for}}</div>
+    <div class="code-field"><span class="text-slate-400">Plan type:</span> {{plan_type}}</div>
+  </div>
+</div>
+
+{{#has_benefits}}
+<div class="card mb-4">
+  <h2 class="font-bold mb-2">Benefit</h2>
+  <ul class="space-y-2 text-sm">
+  {{#benefits}}
+    <li>
+      <div class="font-medium">{{name}}</div>
+      {{#has_total}}<div class="text-xs text-slate-400">{{total_disp}}{{#is_unlimited}} · Unlimited{{/is_unlimited}}</div>{{/has_total}}
+    </li>
+  {{/benefits}}
+  </ul>
+</div>
+{{/has_benefits}}
+
+{{#has_tnc}}
+<details class="card mb-4">
+  <summary class="font-bold cursor-pointer">Syarat & Ketentuan</summary>
+  <div class="mt-2 text-sm text-slate-300">{{{tnc_html}}}</div>
+</details>
+{{/has_tnc}}
+
+<div class="card">
+  <h2 class="font-bold mb-3">Beli Paket</h2>
+  <p class="text-sm text-slate-400 mb-3">Pembelian via <code>/purchase/{{option_code}}</code> — route PR-15.</p>
+  <form action="/purchase/{{option_code}}" method="post" class="space-y-3">
+    <input type="hidden" name="payment_for" value="{{payment_for}}">
+    <input type="hidden" name="price" value="{{opt_price}}">
+    <input type="hidden" name="item_name" value="{{opt_name}}">
+    <div>
+      <label class="label">Metode</label>
+      <select class="form-input" name="method" required>
+        <option value="balance">Pulsa (Balance)</option>
+        <option value="qris">QRIS</option>
+        <option value="ewallet_dana">E-Wallet · DANA</option>
+      </select>
+    </div>
+    <button class="btn btn-primary w-full" type="submit">Bayar</button>
+  </form>
+</div>

@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { sessionMiddleware } from "./middleware/session";
-import { dashboard } from "./routes/dashboard";
 import { myxlAuth } from "./routes/auth";
+import { bookmark } from "./routes/bookmark";
+import { dashboard } from "./routes/dashboard";
+import { hot } from "./routes/hot";
+import { packages } from "./routes/packages";
+import { store } from "./routes/store";
 import { webuiAuth } from "./routes/webui-auth";
 import { htmlResponse, renderErrorPage } from "./ssr";
 import type { AppEnv } from "./types";
@@ -21,6 +25,10 @@ app.get("/health", (c) =>
 app.route("/", webuiAuth);
 app.route("/", myxlAuth);
 app.route("/", dashboard);
+app.route("/", packages);
+app.route("/", store);
+app.route("/", hot);
+app.route("/", bookmark);
 
 app.get("/demo/error", (c) => {
   const html = renderErrorPage(c.req.raw, {

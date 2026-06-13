@@ -1,0 +1,20 @@
+<div class="flex items-center justify-between mb-4 gap-3">
+  <h1 class="text-2xl font-bold">Store Families</h1>
+  <form method="get" class="text-sm">
+    <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="enterprise" value="true" {{#enterprise}}checked{{/enterprise}} onchange="this.form.submit()"> <span class="text-slate-300">Enterprise</span></label>
+  </form>
+</div>
+<p class="text-sm text-slate-400 mb-4">Kategori paket. Klik buat lihat opsi dalam family.</p>
+{{^has_families}}<div class="card text-slate-400 text-sm">Tidak ada family.</div>{{/has_families}}
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+{{#families}}
+<a href="/packages/by-family?code={{id}}" class="card flex items-center gap-3 group">
+  {{#has_icon}}<img src="{{icon}}" alt="" class="w-10 h-10 rounded bg-slate-800 object-contain shrink-0">{{/has_icon}}
+  {{^has_icon}}<div class="w-10 h-10 rounded bg-slate-800 flex items-center justify-center shrink-0">📦</div>{{/has_icon}}
+  <div class="min-w-0">
+    <div class="font-medium group-hover:text-indigo-300 truncate">{{label}}</div>
+    <div class="text-xs text-slate-500 font-mono truncate">{{id}}</div>
+  </div>
+</a>
+{{/families}}
+</div>

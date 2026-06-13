@@ -1,8 +1,18 @@
 import accountsTemplate from "./templates/accounts.html";
 import baseTemplate from "./templates/base.html";
+import bookmarkTemplate from "./templates/bookmark.html";
 import dashboardTemplate from "./templates/dashboard.html";
 import errorBodyTemplate from "./templates/error_body.html";
+import familyDetailTemplate from "./templates/family_detail.html";
+import hotTemplate from "./templates/hot.html";
 import loginTemplate from "./templates/login.html";
+import myPackagesTemplate from "./templates/my_packages.html";
+import packageDetailTemplate from "./templates/package_detail.html";
+import packagesInputCodeTemplate from "./templates/packages_input_code.html";
+import storeFamiliesTemplate from "./templates/store_families.html";
+import storePackagesTemplate from "./templates/store_packages.html";
+import storeRedemablesTemplate from "./templates/store_redemables.html";
+import storeSegmentsTemplate from "./templates/store_segments.html";
 import webuiLoginTemplate from "./templates/webui_login.html";
 
 export const TEMPLATES: Record<string, string> = {
@@ -12,4 +22,14 @@ export const TEMPLATES: Record<string, string> = {
   login: loginTemplate,
   dashboard: dashboardTemplate,
   accounts: accountsTemplate,
+  packages_input_code: packagesInputCodeTemplate,
+  package_detail: packageDetailTemplate,
+  family_detail: familyDetailTemplate,
+  my_packages: myPackagesTemplate,
+  hot: hotTemplate,
+  bookmark: bookmarkTemplate,
+  store_segments: storeSegmentsTemplate,
+  store_families: storeFamiliesTemplate,
+  store_packages: storePackagesTemplate,
+  store_redemables: storeRedemablesTemplate,
 };
