@@ -156,6 +156,9 @@ input:checked + .theme-card {
   background: #0f172a;
   box-shadow: 4px 4px 8px #060a12, -4px -4px 8px #182442;
   border-radius: 16px;
+  border: none;
+  color: #e2e8f0;
+  text-decoration: none;
   transition: all 0.15s;
   min-width: 0;
   max-width: 100%;
@@ -163,6 +166,21 @@ input:checked + .theme-card {
 }
 .card-link:hover {
   box-shadow: 6px 6px 12px #060a12, -6px -6px 12px #182442;
+  color: #f1f5f9;
+}
+.card-stat {
+  min-height: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.card-stat:active {
+  box-shadow: inset 3px 3px 6px #060a12, inset -3px -3px 6px #182442;
+}
+.card-stat-icon {
+  line-height: 0;
+  opacity: 0.85;
 }
 .card-action {
   display: flex;
@@ -691,6 +709,9 @@ pre {
   box-shadow: 4px 4px 8px #d1d5db, -4px -4px 8px #ffffff !important;
 }
 .theme-light .neu-inset-card {
+  box-shadow: inset 3px 3px 6px #d1d5db, inset -3px -3px 6px #ffffff !important;
+}
+.theme-light .card-stat:active {
   box-shadow: inset 3px 3px 6px #d1d5db, inset -3px -3px 6px #ffffff !important;
 }
 .theme-light .neu-badge {
