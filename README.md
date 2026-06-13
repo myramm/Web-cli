@@ -73,6 +73,8 @@ npm run db:migrations:apply:production
 npm run db:migrations:apply:staging
 ```
 
+Migrasi utama: `0001_init.sql` (user, storage, monitoring), `0002_google_auth.sql` (Google OAuth + kode link Telegram).
+
 #### 5. Set secrets
 
 Jangan commit rahasia. Salin template lokal:
@@ -102,6 +104,22 @@ npx wrangler secret put X_API_BASE_SECRET --env production
 # Opsional — Telegram webhook
 npx wrangler secret put TELEGRAM_BOT_TOKEN --env production
 npx wrangler secret put TELEGRAM_WEBHOOK_SECRET --env production
+
+# Opsional — Google OAuth (register / login dengan Google)
+npx wrangler secret put GOOGLE_CLIENT_ID --env production
+npx wrangler secret put GOOGLE_CLIENT_SECRET --env production
+```
+
+**Google OAuth** — buat OAuth Client ID (Web application) di [Google Cloud Console](https://console.cloud.google.com/apis/credentials). Tambahkan **Authorized redirect URI**:
+
+```
+https://<nama-worker>.<subdomain>.workers.dev/u/auth/google/callback
+```
+
+Contoh production fork ini:
+
+```
+https://webui-xl.arifianilhamnur.workers.dev/u/auth/google/callback
 ```
 
 Generate `SESSION_SECRET`:
@@ -169,6 +187,7 @@ Runbook lengkap: [docs/cutover-runbook.md](docs/cutover-runbook.md) · Checklist
 | `XDATA_KEY`, `AX_API_SIG_KEY`, `X_API_BASE_SECRET` | Ya | Request signing |
 | `AX_FP`, `AX_FP_KEY` | Ya | Device fingerprint |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | Tidak | Bot Telegram (webhook) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Tidak | Register & login dengan Google |
 
 ### Reset password user (D1)
 
@@ -187,16 +206,44 @@ python3 scripts/reset-worker-password.py \
 ## Fitur Web UI
 
 - Login multi-user — data per user di D1 + R2 (Worker) atau `webui_data/` (FastAPI)
+- **Register dengan Google** — daftar publik lewat akun Google (Worker)
+- **Login Google** atau username/password (akun lama / yang sudah set password)
+- **Hubungkan Google** ke akun lama lewat halaman **Akun** (setelah login password)
 - Dashboard neumorphic, paket aktif, beli paket (pulsa / QRIS / decoy)
 - Bookmark, hot deals, family plan, circle, store, notifikasi, transaksi
 - Decoy (`/settings/decoy`), monitoring kuota + alert Telegram
 
-**Telegram (ringkas):**
+### Autentikasi (Cloudflare Worker)
 
-- `/link username password` — hubungkan chat ke user Web UI
-- `/nomor` — pilih nomor MyXL aktif
-- `/kuota` — info pelanggan + kuota & paket aktif
-- Menu beli paket: hot / family code / option code / bookmark
+| Halaman | Cara masuk |
+|---------|------------|
+| `/u/register` | **Daftar dengan Google** saja (butuh `GOOGLE_CLIENT_*` secrets) |
+| `/u/login` | **Masuk dengan Google** atau username + password |
+| `/u/account` | Hubungkan Google ke akun yang sudah ada; set/ubah password (opsional) |
+
+User baru via Google otomatis dapat **username internal** (dari email / Google ID). Semua data MyXL, monitoring, dan blob R2 tetap di-scope per username itu.
+
+> **Gratis (Workers Free):** Google OAuth dan Telegram webhook tidak butuh layanan berbayar. Kirim email otomatis (verifikasi / reset) **tidak** disertakan — cukup untuk stack full-free.
+
+### Telegram bot (Worker — webhook)
+
+Setup bot lewat **Monitoring → Telegram Settings** di Web UI:
+
+1. Isi **Bot Token** dari [@BotFather](https://t.me/BotFather)
+2. Centang **Bot aktif** → **Simpan** (webhook didaftarkan otomatis ke `/telegram/webhook`)
+3. **Generate kode link** di halaman yang sama → kirim ke bot: `/link KODE` atau `/start KODE` (kode berlaku 10 menit)
+
+**Perintah bot (ringkas):**
+
+| Perintah | Fungsi |
+|----------|--------|
+| `/link KODE` | Hubungkan chat Telegram ke akun WebUI (kode dari Web UI) |
+| `/start` | Menu awal / bantuan link |
+| `/nomor` | Pilih nomor MyXL aktif |
+| `/kuota` | Info pelanggan + kuota & paket aktif |
+| `/menu` | Menu utama (beli paket, history, unsub, dll.) |
+
+> Mode **FastAPI lokal** (`run-web.py`) masih memakai pola lama (`/link username password` + polling). Production Worker memakai **webhook** + **kode link**.
 
 ---
 
@@ -292,6 +339,10 @@ me-cli-sunset/
 | Kartu UI tidak kelihatan | Hard refresh (`Ctrl+Shift+R`); cek `/static/css/custom.css` ter-load |
 | `ModuleNotFoundError` (CLI) | Aktifkan venv |
 | Telegram tidak merespons (FastAPI) | Cek `webui_data/telegram.json`, restart `run-web.py` |
+| Telegram tidak merespons (Worker) | Buka **Monitoring → Telegram** → cek **Webhook Status** → **Daftar ulang webhook**; pastikan `TELEGRAM_BOT_TOKEN` valid |
+| Tombol Google tidak muncul / error OAuth | Set `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`; redirect URI harus exact match di Google Console |
+| `redirect_uri_mismatch` (Google) | Tambahkan `https://<host>/u/auth/google/callback` di OAuth client |
+| Link Telegram gagal | Generate kode baru di Web UI (expired 10 menit); kirim `/link KODE` ke bot |
 | Deploy button gagal | Pastikan repo **public**; folder `worker/` harus punya `package.json` + `wrangler.toml` sendiri |
 
 ---
