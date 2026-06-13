@@ -25,7 +25,8 @@ from app.service.crypto_helper import (
 from app.service.crypto_helper import decrypt_xdata as dec_xdata
 from app.service.crypto_helper import encrypt_circle_msisdn as encrypt_msisdn
 from app.service.crypto_helper import decrypt_circle_msisdn as decrypt_msisdn
-from webui.context import resolve_path
+from webui.storage.backend import USER_AX_FP
+from webui.storage.tenant import read_user_text, user_blob_exists, write_user_text
 
 API_KEY = os.getenv("API_KEY")
 AES_KEY_ASCII = os.getenv("AES_KEY_ASCII")
@@ -57,14 +58,11 @@ def ax_fingerprint(dev: DeviceInfo, secret_key_32hex_ascii: str) -> str:
     return base64.b64encode(ct).decode("ascii")
 
 def load_ax_fp() -> str:
-    fp_path = "ax.fp"
-    if os.path.exists(fp_path):
-        with open(resolve_path(fp_path), "r", encoding="utf-8") as f:
-            content = f.read().strip()
-            if content:
-                return content
-    
-    # Generate new if not found/empty
+    if user_blob_exists(USER_AX_FP):
+        content = (read_user_text(USER_AX_FP) or "").strip()
+        if content:
+            return content
+
     dev = DeviceInfo(
         manufacturer="samsung",
         model="SM-N935F",
@@ -76,10 +74,9 @@ def load_ax_fp() -> str:
         android_release="13",
         msisdn="6281398370564"
     )
-    
+
     new_fp = ax_fingerprint(dev, AX_FP_KEY)
-    with open(resolve_path(fp_path), "w", encoding="utf-8") as f:
-        f.write(new_fp)
+    write_user_text(USER_AX_FP, new_fp)
     return new_fp
     
 

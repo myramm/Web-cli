@@ -23,6 +23,10 @@ class SQLiteBackendTests(unittest.TestCase):
         os.environ["STORAGE_ENCRYPTION_KEY"] = "c" * 64
         os.environ["WEBUI_STORAGE_BACKEND"] = "sqlite"
         os.environ["WEBUI_SQLITE_PATH"] = str(self.db_path)
+        os.environ.setdefault("BASE_CIAM_URL", "https://example.test/ciam")
+        os.environ.setdefault("BASE_API_URL", "https://example.test/api")
+        os.environ.setdefault("BASIC_AUTH", "test")
+        os.environ.setdefault("UA", "test")
         clear_storage_cache()
 
         patchers = [

@@ -1,37 +1,28 @@
-"""Per-user quota snapshot cache.
-
-Written by monitor_loop after each successful quota fetch.
-Read by the monitoring dashboard for instant page loads.
-File: webui_data/users/{username}/quota_cache.json
-"""
+"""Per-user quota snapshot cache (storage-backed)."""
 import json
-import os
 import time
-from pathlib import Path
 
-from webui.users import user_dir
+from webui.storage.backend import USER_QUOTA_CACHE
 
 
-def _cache_path(username: str) -> Path:
-    return user_dir(username) / "quota_cache.json"
+def _storage():
+    from webui.storage import get_storage
+    return get_storage()
 
 
 def load_cache(username: str) -> dict:
-    p = _cache_path(username)
-    if not p.exists():
+    raw = _storage().get_blob(username, USER_QUOTA_CACHE)
+    if not raw:
         return {}
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
     except Exception:
         return {}
 
 
 def save_cache(username: str, data: dict) -> None:
-    p = _cache_path(username)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    os.replace(tmp, p)
+    _storage().put_blob(username, USER_QUOTA_CACHE, json.dumps(data, indent=2))
 
 
 def update_account_cache(username: str, msisdn: int, balance: dict | None, quotas: list | None) -> None:

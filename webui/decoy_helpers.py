@@ -1,20 +1,15 @@
-"""Decoy file helpers (no app.* imports — safe under user_cwd)."""
-import json
-from pathlib import Path
-from webui.context import resolve_path
+"""Decoy file helpers (storage-backed, safe under user_cwd)."""
+from webui.storage.tenant import get_storage_username, read_user_json
+from webui.storage.backend import USER_DECOY_DIR
 
 
-def decoy_dir() -> Path:
-    return Path("decoy_data")
+def _decoy_prefix() -> str:
+    return f"{USER_DECOY_DIR}/"
 
 
-def _load_json(path: Path) -> dict:
-    try:
-        with open(resolve_path(path), encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+def _load_json(object_key: str) -> dict:
+    data = read_user_json(object_key, default={})
+    return data if isinstance(data, dict) else {}
 
 
 def _configured(data: dict) -> bool:
@@ -45,16 +40,23 @@ def _pay_icon(kind: str) -> str:
     return "🎭"
 
 
-def list_default_decoy_choices() -> list[dict]:
-    """Built-in decoy-*.json slots (V1 / default). One button per configured file."""
-    d = decoy_dir()
-    if not d.exists():
-        return []
+def _list_decoy_keys(pattern_prefix: str, glob_suffix: str) -> list[str]:
+    from webui.storage import get_storage
+    username = get_storage_username()
+    keys = get_storage().list_blobs(username, f"{USER_DECOY_DIR}/")
+    out = []
+    for key in keys:
+        name = key.removeprefix(f"{USER_DECOY_DIR}/")
+        if name.startswith(pattern_prefix) and name.endswith(glob_suffix):
+            out.append(key)
+    return sorted(out)
 
+
+def list_default_decoy_choices() -> list[dict]:
     choices: list[dict] = []
-    for p in sorted(d.glob("decoy-*.json")):
-        slot = p.stem[len("decoy-"):]
-        data = _load_json(p)
+    for object_key in _list_decoy_keys("decoy-", ".json"):
+        slot = object_key.split("/")[-1][len("decoy-"):-len(".json")]
+        data = _load_json(object_key)
         if not _configured(data):
             continue
         kind = slot.rsplit("-", 1)[-1] if "-" in slot else slot
@@ -75,15 +77,10 @@ def list_default_decoy_choices() -> list[dict]:
 
 
 def list_custom_decoy_choices() -> list[dict]:
-    """custom-*.json decoys (V2)."""
-    d = decoy_dir()
-    if not d.exists():
-        return []
-
     choices: list[dict] = []
-    for p in sorted(d.glob("custom-*.json")):
-        name = p.stem[len("custom-"):]
-        data = _load_json(p)
+    for object_key in _list_decoy_keys("custom-", ".json"):
+        name = object_key.split("/")[-1][len("custom-"):-len(".json")]
+        data = _load_json(object_key)
         if not _configured(data):
             continue
         opt = (data.get("option_name") or name).strip()
@@ -100,5 +97,4 @@ def list_custom_decoy_choices() -> list[dict]:
 
 
 def list_configured_decoy_choices() -> list[dict]:
-    """All configured decoys (default + custom)."""
     return list_default_decoy_choices() + list_custom_decoy_choices()

@@ -93,43 +93,61 @@ def user_dir(username: str) -> Path:
     return USERS_DIR / username
 
 
-def _migrate_legacy_data_into(target_dir: Path) -> list[str]:
-    """If root has legacy files (refresh-tokens.json, ax.fp, etc.) and target is fresh,
-    move them in so existing logged-in MyXL session carries over to the first webui user.
-    Returns list of migrated items.
-    """
+def _migrate_legacy_data_into(username: str) -> list[str]:
+    """Move root-level legacy MyXL files into the first webui user's storage."""
+    from webui.storage import get_storage
+
+    storage = get_storage()
     migrated: list[str] = []
     for name in USER_FILES:
         src = PROJECT_DIR / name
-        dst = target_dir / name
-        if src.exists() and not dst.exists():
+        if src.exists() and not storage.blob_exists(username, name):
             try:
-                shutil.move(str(src), str(dst))
+                storage.put_blob(username, name, src.read_text(encoding="utf-8"))
+                src.unlink()
                 migrated.append(name)
             except Exception:
                 pass
     for d in USER_DIRS:
         src = PROJECT_DIR / d
-        dst = target_dir / d
-        if src.exists() and not dst.exists():
-            try:
-                shutil.move(str(src), str(dst))
-                migrated.append(d + "/")
-            except Exception:
-                pass
+        if not src.exists():
+            continue
+        for path in src.rglob("*"):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(src).as_posix()
+            key = f"{d}/{rel}"
+            if not storage.blob_exists(username, key):
+                try:
+                    storage.put_blob(username, key, path.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+        try:
+            shutil.rmtree(src)
+            migrated.append(d + "/")
+        except Exception:
+            pass
     return migrated
 
 
-def _seed_decoy_templates(target_dir: Path) -> None:
-    """Copy stock decoy templates from project decoy_data (if present) for fresh users."""
-    src = PROJECT_DIR / "decoy_data"
-    dst = target_dir / "decoy_data"
-    if not src.exists() or dst.exists():
+def _seed_decoy_templates(username: str) -> None:
+    """Seed stock decoy templates from project decoy_data/ into user storage."""
+    from webui.storage import get_storage
+    from webui.storage.backend import USER_DECOY_DIR
+
+    storage = get_storage()
+    if storage.list_blobs(username, f"{USER_DECOY_DIR}/"):
         return
-    try:
-        shutil.copytree(src, dst)
-    except Exception:
-        dst.mkdir(parents=True, exist_ok=True)
+    src = PROJECT_DIR / "decoy_data"
+    if not src.exists():
+        return
+    for path in src.rglob("*.json"):
+        rel = path.relative_to(src).as_posix()
+        key = f"{USER_DECOY_DIR}/{rel}"
+        try:
+            storage.put_blob(username, key, path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
 
 
 def create_user(username: str, password: str) -> tuple[bool, str]:
@@ -148,15 +166,12 @@ def create_user(username: str, password: str) -> tuple[bool, str]:
         "created_at": int(time.time()),
     })
     save_users(users)
-    udir = user_dir(username)
-    udir.mkdir(parents=True, exist_ok=True)
-    # On very first registered user, migrate root-level legacy files in (so existing
-    # MyXL session is preserved). Subsequent users get a fresh dir + seeded decoy templates.
+    from webui.storage import get_storage
+    get_storage().ensure_user_dir(username)
     is_first = len(users) == 1
     if is_first:
-        _migrate_legacy_data_into(udir)
-    # Always seed decoy templates if user has no decoy_data yet
-    _seed_decoy_templates(udir)
+        _migrate_legacy_data_into(username)
+    _seed_decoy_templates(username)
     return True, ""
 
 

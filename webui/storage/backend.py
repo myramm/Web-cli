@@ -22,6 +22,7 @@ USER_AX_FP = "ax.fp"
 USER_BOOKMARK = "bookmark.json"
 USER_QUOTA_CACHE = "quota_cache.json"
 USER_MONITORING = "monitoring.json"
+USER_MONITOR_LOG = "monitor.log"
 USER_TELEGRAM = "telegram.json"
 USER_DECOY_DIR = "decoy_data"
 
@@ -33,6 +34,7 @@ ENCRYPTED_BLOB_KEYS: frozenset[str] = frozenset({
     USER_BOOKMARK,
     USER_QUOTA_CACHE,
     USER_MONITORING,
+    USER_MONITOR_LOG,
     USER_TELEGRAM,
     GLOBAL_TELEGRAM_CONFIG,
 })

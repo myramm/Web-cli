@@ -9,7 +9,8 @@ from webui.deps import render, get_active_user_safe
 from webui import monitoring as M
 from webui import quota_cache as QC
 from webui import telegram_config as TC
-from webui.users import get_user, load_users, user_dir
+from webui.cwd_lock import list_user_accounts
+from webui.users import get_user, load_users
 
 router = APIRouter()
 
@@ -18,14 +19,7 @@ def _user_accounts(request: Request) -> list[dict]:
     webui_user = getattr(request.state, "webui_user", None)
     if not webui_user:
         return []
-    udir = user_dir(webui_user["username"])
-    rt_file = udir / "refresh-tokens.json"
-    if not rt_file.exists():
-        return []
-    try:
-        return json.loads(rt_file.read_text(encoding="utf-8"))
-    except Exception:
-        return []
+    return list_user_accounts(webui_user["username"])
 
 
 @router.get("/monitoring")

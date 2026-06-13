@@ -1,79 +1,37 @@
-"""Quota monitoring storage + helpers.
-
-Per-user files (resolved CWD-relative; middleware chdir-s into each user dir):
-- monitoring.json : list of rules
-- telegram.json   : {bot_token, chat_id}
-- monitor.log     : append-only log of rule evaluations & actions
-
-Rule schema:
-{
-  "id": "<uuid hex>",
-  "name": "User-given label",
-  "msisdn": 6281234567890,            # which MyXL account to monitor (must be in their refresh-tokens)
-  "match": {
-    "kind": "any" | "quota_name" | "quota_code" | "group_name",
-    "value": "Tagihan Bulanan" | None,    # null = any quota
-    "data_type": "DATA" | "VOICE" | "TEXT" | "ANY"
-  },
-  "trigger": {
-    "metric": "remaining_pct" | "remaining_bytes" | "remaining_minutes" | "expiring_in_days",
-    "op": "lt" | "lte" | "gt" | "gte" | "eq",
-    "value": 10              # int / float
-  },
-  "actions": [
-    {"type": "telegram", "message": "..."},
-    {"type": "buy_option", "option_code": "U0Nf...", "method": "balance"|"qris"|"ewallet_dana"|... },
-    {"type": "unsubscribe"}     # unsubscribe THE matched quota
-  ],
-  "cooldown_seconds": 3600,
-  "enabled": true,
-  "last_fired_at": 0,
-  "last_status": "ok|fired|error|...",
-  "last_msg": ""
-}
-"""
-import os
+"""Quota monitoring storage + helpers (storage-backed per user)."""
 import json
 import time
 import uuid
-from pathlib import Path
 from typing import Optional
 
 import requests
 
-
-def _read_json(name: str, default):
-    p = Path(name)
-    if not p.exists():
-        return default
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        return default
+from webui.storage.backend import USER_MONITORING, USER_MONITOR_LOG, USER_TELEGRAM
+from webui.storage.tenant import read_user_json, read_user_text, write_user_json, write_user_text
 
 
-def _write_json(name: str, data):
-    p = Path(name)
-    tmp = p.with_suffix(p.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    os.replace(tmp, p)
+def _read_json(key: str, default):
+    data = read_user_json(key, default=default)
+    return data if data is not None else default
 
 
-# --- Telegram config -------------------------------------------------------
+def _write_json(key: str, data) -> None:
+    write_user_json(key, data)
+
 
 def load_telegram() -> dict:
-    return _read_json("telegram.json", {"bot_token": "", "chat_id": ""})
+    data = _read_json(USER_TELEGRAM, {"bot_token": "", "chat_id": ""})
+    return data if isinstance(data, dict) else {"bot_token": "", "chat_id": ""}
 
 
 def save_telegram(bot_token: str, chat_id: str) -> None:
-    _write_json("telegram.json", {
+    _write_json(USER_TELEGRAM, {
         "bot_token": (bot_token or "").strip(),
         "chat_id": (chat_id or "").strip(),
     })
 
 
 def resolve_send_config(username: Optional[str] = None) -> dict:
-    """Merge global bot token with chat_id from webui user link or per-user telegram.json."""
     from webui import telegram_config as TC
     from webui.users import get_user
 
@@ -96,7 +54,6 @@ def resolve_send_config(username: Optional[str] = None) -> dict:
 
 
 def send_telegram(text: str, *, cfg: Optional[dict] = None, username: Optional[str] = None) -> tuple[bool, str]:
-    """Send a Telegram message. Returns (ok, status_or_error)."""
     cfg = cfg or resolve_send_config(username)
     token = cfg.get("bot_token", "").strip()
     chat = cfg.get("chat_id", "").strip()
@@ -116,15 +73,13 @@ def send_telegram(text: str, *, cfg: Optional[dict] = None, username: Optional[s
         return False, f"Exception: {e}"
 
 
-# --- Rules ----------------------------------------------------------------
-
 def load_rules() -> list[dict]:
-    rules = _read_json("monitoring.json", [])
+    rules = _read_json(USER_MONITORING, [])
     return rules if isinstance(rules, list) else []
 
 
 def save_rules(rules: list[dict]) -> None:
-    _write_json("monitoring.json", rules)
+    _write_json(USER_MONITORING, rules)
 
 
 def get_rule(rule_id: str) -> Optional[dict]:
@@ -189,33 +144,29 @@ def mark_fired(rule_id: str, status: str, msg: str) -> None:
             return
 
 
-# --- Log ------------------------------------------------------------------
-
-LOG_FILE = "monitor.log"
-LOG_MAX_BYTES = 256 * 1024  # rotate after 256 KB
+LOG_MAX_BYTES = 256 * 1024
 
 
 def log_line(line: str) -> None:
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     full = f"[{ts}] {line}\n"
     try:
-        p = Path(LOG_FILE)
-        if p.exists() and p.stat().st_size > LOG_MAX_BYTES:
-            # Rotate: keep last half
-            existing = p.read_text(encoding="utf-8", errors="ignore").splitlines()
-            p.write_text("\n".join(existing[-200:]) + "\n", encoding="utf-8")
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(full)
+        existing = read_user_text(USER_MONITOR_LOG) or ""
+        combined = existing + full
+        if len(combined.encode("utf-8")) > LOG_MAX_BYTES:
+            lines = combined.splitlines()
+            combined = "\n".join(lines[-200:]) + "\n"
+        write_user_text(USER_MONITOR_LOG, combined)
     except Exception:
         pass
 
 
 def tail_log(n: int = 100) -> list[str]:
-    p = Path(LOG_FILE)
-    if not p.exists():
-        return []
     try:
-        lines = p.read_text(encoding="utf-8", errors="ignore").splitlines()
+        text = read_user_text(USER_MONITOR_LOG)
+        if not text:
+            return []
+        lines = text.splitlines()
         return lines[-n:]
     except Exception:
         return []

@@ -33,12 +33,17 @@ async def lifespan(app: FastAPI):
     from webui.telegram_bot import TelegramBot
     from webui.telegram_config import load_config
 
-    _monitor_task = asyncio.create_task(monitor_loop())
+    disable_monitor = os.getenv("DISABLE_MONITOR", "").strip().lower() in ("1", "true", "yes")
+    disable_telegram = os.getenv("DISABLE_TELEGRAM", "").strip().lower() in ("1", "true", "yes")
 
-    tg_cfg = load_config()
-    if tg_cfg.get("enabled") and tg_cfg.get("bot_token"):
-        _bot_instance = TelegramBot(tg_cfg["bot_token"])
-        _bot_instance.start()
+    if not disable_monitor:
+        _monitor_task = asyncio.create_task(monitor_loop())
+
+    if not disable_telegram:
+        tg_cfg = load_config()
+        if tg_cfg.get("enabled") and tg_cfg.get("bot_token"):
+            _bot_instance = TelegramBot(tg_cfg["bot_token"])
+            _bot_instance.start()
 
     yield
 

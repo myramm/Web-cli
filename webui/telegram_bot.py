@@ -465,11 +465,14 @@ class TelegramBot:
         uname = self._linked_username(chat_id)
         if not uname:
             return None
-        path = user_dir(uname) / "active.number"
-        if not path.exists():
-            return None
+        from webui.storage.backend import USER_ACTIVE_NUMBER
+        from webui.storage.tenant import read_user_text
         try:
-            return int(path.read_text(encoding="utf-8").strip())
+            with user_cwd(uname):
+                text = read_user_text(USER_ACTIVE_NUMBER)
+            if not text:
+                return None
+            return int(text.strip())
         except (TypeError, ValueError, OSError):
             return None
 
@@ -511,9 +514,10 @@ class TelegramBot:
             return False
         if not self._account_meta(chat_id, msisdn):
             return False
-        udir = user_dir(uname)
-        udir.mkdir(parents=True, exist_ok=True)
-        (udir / "active.number").write_text(str(msisdn), encoding="utf-8")
+        from webui.storage.backend import USER_ACTIVE_NUMBER
+        from webui.storage.tenant import write_user_text
+        with user_cwd(uname):
+            write_user_text(USER_ACTIVE_NUMBER, str(msisdn))
         with self._state_lock:
             state = self._states.setdefault(chat_id, {})
             state["active_msisdn"] = msisdn
@@ -1089,11 +1093,14 @@ class TelegramBot:
             self._show_bookmark_packages(chat_id, msg_id)
 
     def _load_hot2_bundles(self) -> list[dict]:
-        hot_file = PROJECT_DIR / "hot_data" / "hot2.json"
-        if not hot_file.exists():
+        from webui.storage import get_storage
+        from webui.storage.backend import SHARED_HOT2
+        raw = get_storage().get_blob(None, SHARED_HOT2)
+        if not raw:
             return []
         try:
-            return json.loads(hot_file.read_text(encoding="utf-8"))
+            data = json.loads(raw)
+            return data if isinstance(data, list) else []
         except Exception:
             return []
 

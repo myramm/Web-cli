@@ -17,7 +17,7 @@ from app.service.decoy import DecoyInstance
 from app.type_dict import PaymentItem
 from webui.deps import render, get_active_user_safe
 from webui.routes.decoy_settings import get_custom_decoy_data, list_custom_decoys
-from webui.context import resolve_path
+from webui.storage.tenant import read_user_json
 
 router = APIRouter()
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -60,10 +60,11 @@ def _build_item(pkg: dict) -> PaymentItem:
 
 def _make_decoy_item_from_slot(api_key, tokens, slot_key: str):
     """Build decoy PaymentItem from an explicit decoy_data/decoy-{slot_key}.json file."""
-    path = Path(f"decoy_data/decoy-{slot_key}.json")
+    object_key = f"decoy_data/decoy-{slot_key}.json"
     try:
-        with open(resolve_path(path), encoding="utf-8") as f:
-            raw = json.load(f)
+        raw = read_user_json(object_key, default=None)
+        if not isinstance(raw, dict):
+            raise FileNotFoundError(object_key)
     except Exception as e:
         return None, (
             f"Decoy '{slot_key}' belum bisa dipakai — file tidak ada atau invalid: {e}. "
@@ -114,13 +115,14 @@ def _make_decoy_item(api_key, tokens, decoy_kind: str, *, slot_key: str | None =
         # Surface the actual problem: try fetching directly to get a meaningful error
         prefix = DecoyInstance.prefix or "default-"
         decoy_name = prefix + decoy_kind
-        path = f"decoy_data/decoy-{decoy_name}.json"
+        object_key = f"decoy_data/decoy-{decoy_name}.json"
         try:
-            with open(resolve_path(path)) as f:
-                raw = json.load(f)
+            raw = read_user_json(object_key, default=None)
+            if not isinstance(raw, dict):
+                raise FileNotFoundError(object_key)
         except Exception as e:
             return None, (
-                f"Decoy '{decoy_name}' belum bisa dipakai — file {path} tidak ada atau invalid: {e}. "
+                f"Decoy '{decoy_name}' belum bisa dipakai — file {object_key} tidak ada atau invalid: {e}. "
                 f"Buka /settings/decoy untuk set up."
             )
         if not raw.get("family_code") or not raw.get("variant_code"):
@@ -513,8 +515,12 @@ def buy_hot2(request: Request, hot2_idx: int = Form(...), method: str = Form(...
         return render(request, "error.html", title="Login dulu", message="Belum ada akun aktif.")
 
     try:
-        with open(PROJECT_DIR / "hot_data" / "hot2.json", "r", encoding="utf-8") as f:
-            hot_packages = json.load(f)
+        from webui.storage import get_storage
+        from webui.storage.backend import SHARED_HOT2
+        raw = get_storage().get_blob(None, SHARED_HOT2)
+        hot_packages = json.loads(raw) if raw else []
+        if not isinstance(hot_packages, list):
+            hot_packages = []
         if not (0 <= hot2_idx < len(hot_packages)):
             return render(request, "error.html", title="Invalid", message="Index hot2 invalid.")
         selected = hot_packages[hot2_idx]

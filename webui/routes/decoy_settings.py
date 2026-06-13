@@ -1,6 +1,5 @@
 import json
 import re
-from pathlib import Path
 
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -9,18 +8,16 @@ from app.service.auth import AuthInstance
 from app.service.decoy import DecoyInstance
 from app.client.engsel import get_package_details
 from webui.deps import render, get_active_user_safe
-from webui.context import resolve_path
+from webui.storage.backend import USER_DECOY_DIR
+from webui.storage.tenant import (
+    delete_user_blob,
+    read_user_json,
+    user_blob_exists,
+    write_user_json,
+)
 
 router = APIRouter()
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
-# DECOY_DIR is CWD-relative — middleware chdir-s into each user's dir before
-# requests, so this resolves to webui_data/users/{user}/decoy_data/ per-user.
-# Using a property-like fn so we always pick up the CURRENT cwd, not import-time.
-def DECOY_DIR() -> Path:
-    return Path("decoy_data")
-
-# 6 built-in slots used by the existing CLI/decoy service
 BUILTIN_SLOTS = [
     {"key": "default-balance", "label": "Default · Pulsa", "subtype": "Reguler", "method": "balance"},
     {"key": "default-qris",    "label": "Default · QRIS (+1K)", "subtype": "Reguler", "method": "qris"},
@@ -31,62 +28,43 @@ BUILTIN_SLOTS = [
 ]
 BUILTIN_KEYS = {s["key"] for s in BUILTIN_SLOTS}
 
-DEFAULT_FIELDS = {
-    "family_name": "",
-    "family_code": "",
-    "is_enterprise": False,
-    "migration_type": "NONE",
-    "variant_name": "",
-    "variant_code": "",
-    "option_name": "",
-    "order": 1,
-    "price": 0,
-}
-
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,30}$")
 
 
-def _builtin_path(key: str) -> Path:
-    return DECOY_DIR() / f"decoy-{key}.json"
+def _builtin_key(key: str) -> str:
+    return f"{USER_DECOY_DIR}/decoy-{key}.json"
 
 
-def _custom_path(name: str) -> Path:
-    return DECOY_DIR() / f"custom-{name}.json"
+def _custom_key(name: str) -> str:
+    return f"{USER_DECOY_DIR}/custom-{name}.json"
 
 
-def _load_json(path: Path) -> dict:
-    try:
-        with open(resolve_path(path), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            return {}
-        return data
-    except Exception:
-        return {}
+def _load_json(object_key: str) -> dict:
+    data = read_user_json(object_key, default={})
+    return data if isinstance(data, dict) else {}
 
 
-def _save_json(path: Path, data: dict) -> None:
-    DECOY_DIR().mkdir(parents=True, exist_ok=True)
-    with open(resolve_path(path), "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+def _save_json(object_key: str, data: dict) -> None:
+    write_user_json(object_key, data)
 
 
 def list_custom_decoys() -> list[dict]:
-    d = DECOY_DIR()
-    if not d.exists():
-        return []
+    from webui.storage import get_storage
+    from webui.storage.tenant import get_storage_username
+
+    keys = get_storage().list_blobs(get_storage_username(), f"{USER_DECOY_DIR}/custom-")
     out = []
-    for p in sorted(d.glob("custom-*.json")):
-        name = p.stem[len("custom-"):]
-        d = _load_json(p)
-        out.append({"name": name, "data": d, "base_method": d.get("base_method", "balance")})
+    for object_key in sorted(keys):
+        name = object_key.split("/")[-1][len("custom-"):-len(".json")]
+        data = _load_json(object_key)
+        out.append({"name": name, "data": data, "base_method": data.get("base_method", "balance")})
     return out
 
 
 def list_builtin_decoys() -> list[dict]:
     out = []
     for slot in BUILTIN_SLOTS:
-        out.append({**slot, "data": _load_json(_builtin_path(slot["key"]))})
+        out.append({**slot, "data": _load_json(_builtin_key(slot["key"]))})
     return out
 
 
@@ -126,7 +104,7 @@ async def update_builtin(request: Request, key: str):
         return render(request, "error.html", title="Slot tidak dikenal", message=f"Builtin slot '{key}' invalid")
     form = await request.form()
     data = _parse_form_to_data(form)
-    _save_json(_builtin_path(key), data)
+    _save_json(_builtin_key(key), data)
     DecoyInstance.reset_decoys()
     return RedirectResponse(url=f"/settings/decoy?msg=Built-in+%27{key}%27+disimpan", status_code=303)
 
@@ -139,12 +117,12 @@ async def add_custom(request: Request):
         return render(request, "error.html",
                       title="Nama invalid",
                       message="Nama hanya boleh: huruf kecil, angka, _, - (max 31 char). Contoh: v1, vtest, my-decoy")
-    p = _custom_path(name)
-    if p.exists():
+    object_key = _custom_key(name)
+    if user_blob_exists(object_key):
         return render(request, "error.html", title="Nama duplikat",
                       message=f"Custom decoy bernama '{name}' sudah ada. Pilih nama lain atau edit yang ada.")
     data = _parse_form_to_data(form, include_base_method=True)
-    _save_json(p, data)
+    _save_json(object_key, data)
     return RedirectResponse(url=f"/settings/decoy?msg=Custom+%27{name}%27+ditambahkan", status_code=303)
 
 
@@ -152,12 +130,12 @@ async def add_custom(request: Request):
 async def update_custom(request: Request, name: str):
     if not NAME_RE.match(name):
         return render(request, "error.html", title="Nama invalid", message=name)
-    p = _custom_path(name)
-    if not p.exists():
+    object_key = _custom_key(name)
+    if not user_blob_exists(object_key):
         return render(request, "error.html", title="Tidak ditemukan", message=f"custom-{name}.json belum ada")
     form = await request.form()
     data = _parse_form_to_data(form, include_base_method=True)
-    _save_json(p, data)
+    _save_json(object_key, data)
     return RedirectResponse(url=f"/settings/decoy?msg=Custom+%27{name}%27+disimpan", status_code=303)
 
 
@@ -165,27 +143,21 @@ async def update_custom(request: Request, name: str):
 def delete_custom(request: Request, name: str):
     if not NAME_RE.match(name):
         return render(request, "error.html", title="Nama invalid", message=name)
-    p = _custom_path(name)
-    if p.exists():
-        p.unlink()
+    delete_user_blob(_custom_key(name))
     return RedirectResponse(url=f"/settings/decoy?msg=Custom+%27{name}%27+dihapus", status_code=303)
 
 
 def get_custom_decoy_data(name: str) -> dict | None:
-    """Public helper used by purchase route to fetch a custom decoy's package data."""
     if not NAME_RE.match(name):
         return None
-    p = _custom_path(name)
-    if not p.exists():
+    object_key = _custom_key(name)
+    if not user_blob_exists(object_key):
         return None
-    return _load_json(p)
+    return _load_json(object_key)
 
 
 @router.post("/settings/decoy/raw/{kind}/{key}")
 async def update_raw_json(request: Request, kind: str, key: str):
-    """Save raw JSON for either a built-in (kind=builtin) or custom (kind=custom) decoy.
-    For custom, key must match NAME_RE; auto-creates file if missing.
-    """
     form = await request.form()
     raw = form.get("raw_json", "")
     if not raw.strip():
@@ -200,34 +172,31 @@ async def update_raw_json(request: Request, kind: str, key: str):
     if kind == "builtin":
         if key not in BUILTIN_KEYS:
             return render(request, "error.html", title="Slot tidak dikenal", message=key)
-        _save_json(_builtin_path(key), data)
+        _save_json(_builtin_key(key), data)
         DecoyInstance.reset_decoys()
         return RedirectResponse(url=f"/settings/decoy?msg=Built-in+%27{key}%27+(JSON)+disimpan", status_code=303)
     elif kind == "custom":
         if not NAME_RE.match(key):
             return render(request, "error.html", title="Nama invalid", message=key)
-        # ensure base_method present
         if "base_method" not in data:
             data["base_method"] = "balance"
-        _save_json(_custom_path(key), data)
+        _save_json(_custom_key(key), data)
         return RedirectResponse(url=f"/settings/decoy?msg=Custom+%27{key}%27+(JSON)+disimpan", status_code=303)
     return render(request, "error.html", title="Kind invalid", message=kind)
 
 
 @router.post("/settings/decoy/test/{kind}/{key}")
 def test_fetch(request: Request, kind: str, key: str):
-    """Try to fetch the decoy package details and return JSON status — used by AJAX in settings page."""
     user = get_active_user_safe()
     if not user:
         return JSONResponse({"ok": False, "error": "Belum ada akun aktif"}, status_code=200)
 
-    # Load data
     if kind == "builtin":
-        data = _load_json(_builtin_path(key))
+        data = _load_json(_builtin_key(key))
     elif kind == "custom":
         if not NAME_RE.match(key):
             return JSONResponse({"ok": False, "error": "Nama custom invalid"}, status_code=200)
-        data = _load_json(_custom_path(key))
+        data = _load_json(_custom_key(key))
     else:
         return JSONResponse({"ok": False, "error": "Kind invalid"}, status_code=200)
 
@@ -236,10 +205,6 @@ def test_fetch(request: Request, kind: str, key: str):
     if not data.get("family_code") or not data.get("variant_code"):
         return JSONResponse({"ok": False, "error": "family_code / variant_code belum diisi"}, status_code=200)
 
-    # First attempt: try with the EXACT is_enterprise & migration_type stored in file.
-    # If that fails, retry with None (auto) so get_family iterates all combos and
-    # finds whichever (is_enterprise × migration_type) the server actually accepts
-    # for this subscription tier.
     attempts = [
         (data.get("is_enterprise", False), data.get("migration_type", "NONE"), "stored"),
         (None, None, "auto"),
@@ -271,7 +236,6 @@ def test_fetch(request: Request, kind: str, key: str):
         }, status_code=200)
 
     opt = pkg.get("package_option") or {}
-    fam = pkg.get("package_family") or {}
     return JSONResponse({
         "ok": True,
         "option_code": opt.get("package_option_code", ""),
