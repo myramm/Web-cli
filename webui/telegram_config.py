@@ -1,14 +1,7 @@
-"""Global Telegram bot configuration (instance-wide, not per-user).
-
-Stored at webui_data/telegram.json.
-"""
+"""Global Telegram bot configuration (instance-wide, not per-user)."""
 import json
-import os
-from pathlib import Path
 
-from webui.users import WEBUI_DATA
-
-CONFIG_FILE = WEBUI_DATA / "telegram.json"
+from webui.storage.backend import GLOBAL_TELEGRAM_CONFIG
 
 _DEFAULTS = {
     "bot_token": "",
@@ -22,10 +15,12 @@ _DEFAULTS = {
 
 
 def load_config() -> dict:
-    if not CONFIG_FILE.exists():
+    from webui.storage import get_storage
+    raw = get_storage().get_blob(None, GLOBAL_TELEGRAM_CONFIG)
+    if not raw:
         return dict(_DEFAULTS)
     try:
-        data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+        data = json.loads(raw)
         merged = dict(_DEFAULTS)
         merged.update(data)
         return merged
@@ -34,9 +29,7 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict) -> None:
-    WEBUI_DATA.mkdir(parents=True, exist_ok=True)
+    from webui.storage import get_storage
     merged = dict(_DEFAULTS)
     merged.update(cfg)
-    tmp = CONFIG_FILE.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(merged, indent=2), encoding="utf-8")
-    os.replace(tmp, CONFIG_FILE)
+    get_storage().put_blob(None, GLOBAL_TELEGRAM_CONFIG, json.dumps(merged, indent=2))

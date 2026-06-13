@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 from webui.storage.backend import (
@@ -33,6 +34,7 @@ from webui.storage.crypto import (
     resolve_encryption_key,
 )
 from webui.storage.file_backend import FileBackend
+from webui.storage.sqlite_backend import SQLiteBackend, default_db_path, init_db
 from webui.storage.tenant import (
     current_storage_username,
     ensure_user_bootstrap,
@@ -71,7 +73,10 @@ __all__ = [
     "decrypt_text",
     "encrypt_bytes",
     "encrypt_text",
+    "SQLiteBackend",
+    "default_db_path",
     "get_storage",
+    "init_db",
     "is_encrypted",
     "is_encrypted_key",
     "normalize_blob_key",
@@ -94,7 +99,9 @@ def get_storage() -> StorageBackend:
     if backend == "file":
         return FileBackend(encrypt_at_rest=_encrypt_at_rest_enabled())
     if backend == "sqlite":
-        raise NotImplementedError("SQLite backend ships in PR-3 (webui/storage/sqlite_backend.py)")
+        db_path = os.getenv("WEBUI_SQLITE_PATH", "").strip()
+        path = Path(db_path) if db_path else None
+        return SQLiteBackend(path, encrypt_at_rest=_encrypt_at_rest_enabled())
     raise ValueError(f"Unknown WEBUI_STORAGE_BACKEND: {backend!r}")
 
 

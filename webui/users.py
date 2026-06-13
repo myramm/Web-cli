@@ -39,14 +39,8 @@ def _ensure_dirs():
 
 def _secret_key() -> bytes:
     """Lazily generate & persist session secret. Survives restarts."""
-    _ensure_dirs()
-    if not SECRET_FILE.exists():
-        SECRET_FILE.write_bytes(secrets.token_bytes(32))
-        try:
-            os.chmod(SECRET_FILE, 0o600)
-        except Exception:
-            pass
-    return SECRET_FILE.read_bytes()
+    from webui.storage import get_storage
+    return get_storage().get_session_secret()
 
 
 def _serializer() -> URLSafeTimedSerializer:
@@ -77,22 +71,14 @@ def verify_password(password: str, encoded: str) -> bool:
 
 def load_users() -> list[dict]:
     _ensure_dirs()
-    if not USERS_FILE.exists():
-        return []
-    try:
-        with open(USERS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    from webui.storage import get_storage
+    return get_storage().load_users()
 
 
 def save_users(users: list[dict]) -> None:
     _ensure_dirs()
-    tmp = USERS_FILE.with_suffix(".json.tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(users, f, indent=2)
-    os.replace(tmp, USERS_FILE)
+    from webui.storage import get_storage
+    get_storage().save_users(users)
 
 
 def get_user(username: str) -> Optional[dict]:
@@ -192,13 +178,13 @@ def link_telegram(username: str, chat_id: int) -> bool:
             # Sync per-user telegram.json so monitoring alerts find chat_id
             try:
                 from webui import telegram_config as TC
+                from webui.storage import get_storage
+                from webui.storage.backend import USER_TELEGRAM
                 token = TC.load_config().get("bot_token", "")
-                udir = user_dir(username)
-                udir.mkdir(parents=True, exist_ok=True)
-                tg_path = udir / "telegram.json"
-                tg_path.write_text(
+                get_storage().put_blob(
+                    username,
+                    USER_TELEGRAM,
                     json.dumps({"bot_token": token, "chat_id": str(chat_id)}, indent=2),
-                    encoding="utf-8",
                 )
             except Exception:
                 pass
