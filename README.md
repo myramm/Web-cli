@@ -308,8 +308,10 @@ git push -u origin main
 
 ## Disclaimer
 
-By using this tool, you agree to comply with applicable laws and regulations and release the developer from claims arising from its use.
+Fork ini dikembangkan oleh [arifianilhamnrr](https://github.com/arifianilhamnrr) di atas upstream [purplemashu/me-cli-sunset](https://github.com/purplemashu/me-cli-sunset). Disclaimer dan kontak di bawah mengacu ke **upstream asli**, bukan maintainer fork ini.
 
-**Environment variables:** [OUR TELEGRAM CHANNEL](https://t.me/alyxcli)
+**Upstream disclaimer:** By using this tool, you agree to comply with applicable laws and regulations and release the developer from claims arising from its use.
 
-**Contact:** contact@mashu.lol
+**Environment variables (upstream):** [OUR TELEGRAM CHANNEL](https://t.me/alyxcli)
+
+**Kontak fork ini:** arifianilhamnur@gmail.com
