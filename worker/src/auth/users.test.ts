@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { MemoryStorageBackend } from "../storage/memory-backend";
-import { authenticate, createUser, getTheme, loadUsers, setTheme } from "./users";
+import {
+  authenticate,
+  createUser,
+  getTheme,
+  getUserByTelegram,
+  linkTelegram,
+  loadUsers,
+  setTheme,
+  unlinkTelegram,
+} from "./users";
 
 describe("webui users", () => {
   it("creates and authenticates user", async () => {
@@ -18,6 +27,15 @@ describe("webui users", () => {
     const storage = new MemoryStorageBackend();
     const result = await createUser(storage, "X", "secret12");
     expect(result.ok).toBe(false);
+  });
+
+  it("linkTelegram and unlinkTelegram manage chat id", async () => {
+    const storage = new MemoryStorageBackend();
+    await createUser(storage, "alice", "secret12");
+    expect(await linkTelegram(storage, "alice", 4242)).toBe(true);
+    expect((await getUserByTelegram(storage, 4242))?.username).toBe("alice");
+    expect(await unlinkTelegram(storage, "alice")).toBe(true);
+    expect(await getUserByTelegram(storage, 4242)).toBeNull();
   });
 
   it("setTheme updates user preference", async () => {

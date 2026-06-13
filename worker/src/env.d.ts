@@ -15,6 +15,8 @@ export interface Env {
   X_API_BASE_SECRET?: string;
   SESSION_SECRET?: string;
   STORAGE_ENCRYPTION_KEY?: string;
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_WEBHOOK_SECRET?: string;
   // Bindings (enable in wrangler.toml when provisioned)
   DB?: D1Database;
   DATA?: R2Bucket;

@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   "/u/api/",
   "/health",
   "/demo/error",
+  "/telegram/webhook",
 ];
 
 function isPublicPath(path: string): boolean {

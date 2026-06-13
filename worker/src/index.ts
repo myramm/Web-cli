@@ -15,6 +15,7 @@ import { registration } from "./routes/registration";
 import { store } from "./routes/store";
 import { theme } from "./routes/theme";
 import { transaction } from "./routes/transaction";
+import { telegramWebhook } from "./telegram/webhook";
 import { processPurchaseJob } from "./queue/purchase-consumer";
 import type { PurchaseQueueMessage } from "./queue/purchase-jobs";
 import { webuiAuth } from "./routes/webui-auth";
@@ -51,6 +52,7 @@ app.route("/", theme);
 app.route("/", donasi);
 app.route("/", notification);
 app.route("/", transaction);
+app.route("/", telegramWebhook);
 
 app.get("/demo/error", (c) => {
   const html = renderErrorPage(c.req.raw, {

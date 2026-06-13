@@ -74,6 +74,53 @@ export function getTheme(user: WebuiUserRecord | null | undefined): string {
   return user?.theme === "light" ? "light" : "dark";
 }
 
+export async function getUserByTelegram(
+  storage: StorageBackend,
+  chatId: number,
+): Promise<WebuiUserRecord | null> {
+  for (const u of await loadUsers(storage)) {
+    if (u.telegram_chat_id === chatId) return u;
+  }
+  return null;
+}
+
+export async function linkTelegram(
+  storage: StorageBackend,
+  username: string,
+  chatId: number,
+): Promise<boolean> {
+  const users = await loadUsers(storage);
+  const normalized = (username || "").toLowerCase().trim();
+  let found = false;
+  for (const u of users) {
+    if (u.telegram_chat_id === chatId && u.username.toLowerCase() !== normalized) {
+      delete u.telegram_chat_id;
+    }
+    if (u.username.toLowerCase() === normalized) {
+      u.telegram_chat_id = chatId;
+      found = true;
+    }
+  }
+  if (!found) return false;
+  await storage.saveUsers(users);
+  return true;
+}
+
+export async function unlinkTelegram(storage: StorageBackend, username: string): Promise<boolean> {
+  const users = await loadUsers(storage);
+  const normalized = (username || "").toLowerCase().trim();
+  let found = false;
+  for (const u of users) {
+    if (u.username.toLowerCase() === normalized) {
+      delete u.telegram_chat_id;
+      found = true;
+    }
+  }
+  if (!found) return false;
+  await storage.saveUsers(users);
+  return true;
+}
+
 export async function setTheme(
   storage: StorageBackend,
   username: string,

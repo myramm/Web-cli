@@ -68,6 +68,27 @@ export async function addBookmark(
   return true;
 }
 
+export function resolveBookmarkOptionCode(
+  family: Record<string, unknown>,
+  bookmark: BookmarkEntry,
+): string | null {
+  const direct = (bookmark.package_option_code ?? "").trim();
+  if (direct) return direct;
+
+  const variants = (family.package_variants as Record<string, unknown>[]) ?? [];
+  for (const variant of variants) {
+    if (bookmark.variant_name && variant.name !== bookmark.variant_name) continue;
+    const options = (variant.package_options as Record<string, unknown>[]) ?? [];
+    for (const opt of options) {
+      if (bookmark.option_name && opt.name !== bookmark.option_name) continue;
+      if (bookmark.order && opt.order !== bookmark.order) continue;
+      const code = String(opt.package_option_code ?? "");
+      if (code) return code;
+    }
+  }
+  return null;
+}
+
 export async function removeBookmark(
   storage: StorageBackend,
   username: string,
